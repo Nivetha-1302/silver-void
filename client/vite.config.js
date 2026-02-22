@@ -15,12 +15,12 @@ export default defineConfig({
     https: true,
     proxy: {
       '/socket.io': {
-        target: 'http://localhost:5000',
+        target: 'https://silver-void.onrender.com',
         ws: true,
         changeOrigin: true
       },
       '/api': {
-        target: 'http://localhost:5000',
+        target: 'https://silver-void.onrender.com',
         changeOrigin: true
       }
     }

@@ -18,8 +18,8 @@ const LoginForm = ({ onSwitchMethod }) => {
         setError('');
 
         try {
-            // Updated to point to the correct API endpoint
-            const res = await axios.post('http://localhost:5000/api/auth/login', { email, password });
+            // Updated to use relative path (consistent with other API calls and proxy)
+            const res = await axios.post('/api/auth/login', { email, password });
 
             localStorage.setItem('token', res.data.token);
             localStorage.setItem('currentUser', JSON.stringify(res.data.user));
