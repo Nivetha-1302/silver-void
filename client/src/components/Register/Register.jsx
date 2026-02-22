@@ -22,6 +22,7 @@ const Register = () => {
         role: 'employee'
     });
     const [faceDescriptor, setFaceDescriptor] = useState(null);
+    const [capturedImage, setCapturedImage] = useState(null);
     const [isModelLoading, setIsModelLoading] = useState(true);
     const [isScanning, setIsScanning] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -50,11 +51,13 @@ const Register = () => {
     const startCamera = async () => {
         setIsScanning(true);
         setError('');
+        setFaceDescriptor(null);
+        setCapturedImage(null);
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: {
-                    width: { ideal: 480 },
-                    height: { ideal: 360 },
+                    width: { ideal: 640 },
+                    height: { ideal: 480 },
                     facingMode: "user",
                     frameRate: { ideal: 60 }
                 }
@@ -76,7 +79,14 @@ const Register = () => {
         setIsScanning(false);
     };
 
-    // Auto-Capture Logic (Robust Tuning)
+    const handleResetScan = () => {
+        setFaceDescriptor(null);
+        setCapturedImage(null);
+        setMessage('');
+        startCamera();
+    };
+
+    // Auto-Capture Logic (Fast Tuning)
     useEffect(() => {
         let active = true;
         let lastErrorLog = 0;
@@ -91,19 +101,29 @@ const Register = () => {
             }
 
             try {
-                // Robust settings: 224 is a good balance between speed and accuracy. 
-                // 128 (default) might miss faces in low light.
+                // Using 160 for even faster processing while maintaining decent accuracy
                 const detection = await faceapi.detectSingleFace(
                     videoRef.current,
-                    new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.3 })
+                    new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: 0.4 })
                 ).withFaceLandmarks().withFaceDescriptor();
 
                 if (detection && active) {
+                    // Capture image for preview
+                    const canvas = document.createElement('canvas');
+                    canvas.width = videoRef.current.videoWidth;
+                    canvas.height = videoRef.current.videoHeight;
+                    const ctx = canvas.getContext('2d');
+                    // Draw mirror image to match video
+                    ctx.translate(canvas.width, 0);
+                    ctx.scale(-1, 1);
+                    ctx.drawImage(videoRef.current, 0, 0);
+
+                    setCapturedImage(canvas.toDataURL('image/jpeg', 0.8));
                     setFaceDescriptor(Array.from(detection.descriptor));
                     setMessage('Identity Authenticated!');
                     stopCamera();
                 } else if (active) {
-                    if (Date.now() - lastErrorLog > 2000) {
+                    if (Date.now() - lastErrorLog > 1000) {
                         setMessage('Searching for face...');
                         lastErrorLog = Date.now();
                     }
@@ -322,7 +342,7 @@ const Register = () => {
                                         exit={{ opacity: 0, x: -20 }}
                                         className="space-y-6 text-center"
                                     >
-                                        <div className="relative w-64 h-64 mx-auto rounded-full overflow-hidden bg-slate-100 border-4 border-slate-200 shadow-inner">
+                                        <div className="relative w-64 h-64 mx-auto rounded-full overflow-hidden bg-slate-100 border-4 border-slate-200 shadow-xl group">
                                             {isScanning ? (
                                                 <>
                                                     <video
@@ -331,11 +351,20 @@ const Register = () => {
                                                         muted
                                                         className="w-full h-full object-cover transform scale-x-[-1]"
                                                     />
-                                                    <div className="absolute inset-0 border-4 border-indigo-500/50 rounded-full animate-pulse"></div>
+                                                    <div className="absolute inset-0 border-4 border-indigo-500/50 rounded-full animate-pulse-slow"></div>
+                                                    <div className="absolute inset-0 bg-gradient-to-b from-transparent via-indigo-500/10 to-transparent animate-scan"></div>
                                                 </>
                                             ) : (
-                                                <div className="w-full h-full flex flex-col items-center justify-center text-slate-400">
-                                                    {faceDescriptor ? (
+                                                <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 relative">
+                                                    {capturedImage ? (
+                                                        <motion.img
+                                                            initial={{ scale: 1.2, opacity: 0 }}
+                                                            animate={{ scale: 1, opacity: 1 }}
+                                                            src={capturedImage}
+                                                            className="w-full h-full object-cover"
+                                                            alt="Captured Face"
+                                                        />
+                                                    ) : faceDescriptor ? (
                                                         <>
                                                             <CheckCircle className="w-16 h-16 text-emerald-500 mb-2" />
                                                             <span className="text-emerald-600 font-medium">Face Captured</span>
@@ -364,46 +393,62 @@ const Register = () => {
                                             </div>
                                         )}
 
-                                        <div className="flex gap-4">
-                                            <button
-                                                onClick={() => setStep(1)}
-                                                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
-                                            >
-                                                Back
-                                            </button>
+                                        <div className="flex flex-col gap-3">
+                                            <div className="flex gap-4">
+                                                <button
+                                                    onClick={() => setStep(1)}
+                                                    className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors font-medium"
+                                                >
+                                                    Back to Details
+                                                </button>
 
-                                            {!faceDescriptor ? (
-                                                !isScanning ? (
-                                                    <button
-                                                        onClick={startCamera}
-                                                        className="flex-1 py-2.5 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-500/30 font-medium"
-                                                    >
-                                                        Start Camera
-                                                    </button>
+                                                {!faceDescriptor ? (
+                                                    !isScanning ? (
+                                                        <button
+                                                            onClick={startCamera}
+                                                            className="flex-1 py-3 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-500/30 font-semibold"
+                                                        >
+                                                            Start Scan
+                                                        </button>
+                                                    ) : (
+                                                        <button
+                                                            disabled
+                                                            className="flex-1 py-3 rounded-xl bg-indigo-500/50 text-white font-semibold flex items-center justify-center gap-2"
+                                                        >
+                                                            <Loader2 className="w-5 h-5 animate-spin" />
+                                                            Detecting...
+                                                        </button>
+                                                    )
                                                 ) : (
                                                     <button
-                                                        disabled
-                                                        className="flex-1 py-2.5 rounded-xl bg-indigo-500/50 text-white font-medium flex items-center justify-center gap-2"
+                                                        onClick={handleResetScan}
+                                                        className="flex-1 py-3 rounded-xl border border-indigo-200 text-indigo-600 hover:bg-indigo-50 transition-colors font-semibold"
                                                     >
-                                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                                        Scanning...
+                                                        Scan Again
                                                     </button>
-                                                )
-                                            ) : (
-                                                <button
+                                                )}
+                                            </div>
+
+                                            {faceDescriptor && (
+                                                <motion.button
+                                                    initial={{ opacity: 0, y: 10 }}
+                                                    animate={{ opacity: 1, y: 0 }}
                                                     onClick={handleSubmit}
                                                     disabled={isSubmitting}
-                                                    className="flex-1 py-2.5 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-500/30 font-medium flex items-center justify-center gap-2"
+                                                    className="w-full py-4 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white hover:shadow-xl hover:shadow-indigo-500/40 transition-all shadow-lg shadow-indigo-500/30 font-bold text-lg flex items-center justify-center gap-2"
                                                 >
                                                     {isSubmitting ? (
                                                         <>
-                                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                                            <Loader2 className="w-6 h-6 animate-spin" />
                                                             Creating Account...
                                                         </>
                                                     ) : (
-                                                        'Finish Registration'
+                                                        <>
+                                                            <CheckCircle className="w-6 h-6" />
+                                                            Complete Registration
+                                                        </>
                                                     )}
-                                                </button>
+                                                </motion.button>
                                             )}
                                         </div>
                                     </motion.div>
