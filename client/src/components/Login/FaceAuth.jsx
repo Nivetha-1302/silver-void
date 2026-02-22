@@ -69,12 +69,18 @@ const FaceAuth = ({ onSwitchMethod }) => {
     const scan = async () => {
       if (status === 'verified' || !videoRef.current) return;
 
+      // Ensure video is ready
+      if (videoRef.current.readyState < 2) {
+        requestAnimationFrame(scan);
+        return;
+      }
+
       try {
+        // Optimized for speed: inputSize 160 is significantly faster than 224
         const detection = await faceapi.detectSingleFace(
           videoRef.current,
-          new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.3 })
+          new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: 0.4 })
         ).withFaceLandmarks().withFaceDescriptor();
-
 
         const matcher = faceHandler.getMatcher();
 
@@ -83,27 +89,25 @@ const FaceAuth = ({ onSwitchMethod }) => {
 
           if (match.label !== 'unknown') {
             const userId = match.label;
-            setStatus('verified');
-            setMessage('Identity Verified! Redirecting...');
-
             const foundUser = faceHandler.getUserById(userId);
 
             if (foundUser) {
+              setStatus('verified');
+              setMessage(`Welcome Back, ${foundUser.fullName.split(' ')[0]}!`);
+
               localStorage.setItem('currentUser', JSON.stringify(foundUser));
               localStorage.setItem('token', 'simulated-jwt-token');
 
               setTimeout(() => {
                 if (foundUser.role === 'admin') navigate('/dashboard');
                 else navigate('/workspace');
-              }, 400);
+              }, 300);
               return;
             }
           }
         }
 
-        if (status !== 'verified') {
-          requestAnimationFrame(scan);
-        }
+        requestAnimationFrame(scan);
       } catch (err) {
         requestAnimationFrame(scan);
       }
