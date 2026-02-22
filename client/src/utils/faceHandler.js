@@ -81,6 +81,7 @@ class FaceHandler {
         try {
             await this.loadModels();
             await this.loadCoco();
+            await this.loadUsers(); // Pre-load user biometrics
         } catch (err) {
             console.error("[FaceHandler] LoadAll Failed:", err);
         }

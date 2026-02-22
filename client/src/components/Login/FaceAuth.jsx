@@ -76,10 +76,10 @@ const FaceAuth = ({ onSwitchMethod }) => {
       }
 
       try {
-        // Optimized for speed: inputSize 160 is significantly faster than 224
+        // ULTRA-FAST: 128 is the minimum functional size for tinyFaceDetector
         const detection = await faceapi.detectSingleFace(
           videoRef.current,
-          new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: 0.4 })
+          new faceapi.TinyFaceDetectorOptions({ inputSize: 128, scoreThreshold: 0.35 })
         ).withFaceLandmarks().withFaceDescriptor();
 
         const matcher = faceHandler.getMatcher();
@@ -93,15 +93,17 @@ const FaceAuth = ({ onSwitchMethod }) => {
 
             if (foundUser) {
               setStatus('verified');
-              setMessage(`Welcome Back, ${foundUser.fullName.split(' ')[0]}!`);
+              setMessage(`Welcome Back, ${foundUser.fullName.split(' ')[0]}! ✨`);
 
+              // Store user info and simulate token for instant entry
               localStorage.setItem('currentUser', JSON.stringify(foundUser));
-              localStorage.setItem('token', 'simulated-jwt-token');
+              localStorage.setItem('token', 'session_' + Math.random().toString(36).substr(2, 9));
 
+              // Faster redirect
               setTimeout(() => {
                 if (foundUser.role === 'admin') navigate('/dashboard');
                 else navigate('/workspace');
-              }, 300);
+              }, 200);
               return;
             }
           }
@@ -142,7 +144,10 @@ const FaceAuth = ({ onSwitchMethod }) => {
           <canvas ref={canvasRef} className="absolute inset-0 w-full h-full transform scale-x-[-1]" />
 
           {status === 'scanning' && (
-            <div className="absolute inset-0 border-4 border-indigo-500/50 rounded-full animate-pulse-slow pointer-events-none"></div>
+            <>
+              <div className="absolute inset-0 border-4 border-indigo-500/50 rounded-full animate-pulse-slow pointer-events-none"></div>
+              <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-cyan-400 to-transparent animate-scan shadow-[0_0_15px_rgba(34,211,238,0.8)] pointer-events-none"></div>
+            </>
           )}
 
           {status === 'verified' && (
