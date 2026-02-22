@@ -11,6 +11,7 @@ const FaceAuth = ({ onSwitchMethod }) => {
   const canvasRef = useRef(null);
   const [status, setStatus] = useState('initializing'); // initializing, scanning, verified, error
   const [message, setMessage] = useState('Syncing AI...');
+  const [capturedImage, setCapturedImage] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -92,18 +93,31 @@ const FaceAuth = ({ onSwitchMethod }) => {
             const foundUser = faceHandler.getUserById(userId);
 
             if (foundUser) {
+              // Capture the frame for visual confirmation
+              const canvas = document.createElement('canvas');
+              canvas.width = videoRef.current.videoWidth;
+              canvas.height = videoRef.current.videoHeight;
+              const ctx = canvas.getContext('2d');
+              ctx.translate(canvas.width, 0);
+              ctx.scale(-1, 1);
+              ctx.drawImage(videoRef.current, 0, 0);
+              setCapturedImage(canvas.toDataURL('image/jpeg', 0.8));
+
               setStatus('verified');
               setMessage(`Welcome Back, ${foundUser.fullName.split(' ')[0]}! ✨`);
 
-              // Store user info and simulate token for instant entry
+              // Stop camera immediately
+              if (videoRef.current.srcObject) {
+                videoRef.current.srcObject.getTracks().forEach(track => track.stop());
+              }
+
               localStorage.setItem('currentUser', JSON.stringify(foundUser));
               localStorage.setItem('token', 'session_' + Math.random().toString(36).substr(2, 9));
 
-              // Faster redirect
               setTimeout(() => {
                 if (foundUser.role === 'admin') navigate('/dashboard');
                 else navigate('/workspace');
-              }, 200);
+              }, 400); // Slightly longer delay to show the "snap"
               return;
             }
           }
@@ -134,13 +148,17 @@ const FaceAuth = ({ onSwitchMethod }) => {
     >
       <div className="relative mb-8">
         <div className="relative w-64 h-64 rounded-full overflow-hidden border-4 border-slate-200 shadow-2xl glass-card bg-white">
-          <video
-            ref={videoRef}
-            autoPlay
-            muted
-            onPlay={handleVideoOnPlay}
-            className="w-full h-full object-cover transform scale-x-[-1]"
-          />
+          {capturedImage ? (
+            <img src={capturedImage} className="w-full h-full object-cover" alt="Captured Face" />
+          ) : (
+            <video
+              ref={videoRef}
+              autoPlay
+              muted
+              onPlay={handleVideoOnPlay}
+              className="w-full h-full object-cover transform scale-x-[-1]"
+            />
+          )}
           <canvas ref={canvasRef} className="absolute inset-0 w-full h-full transform scale-x-[-1]" />
 
           {status === 'scanning' && (
