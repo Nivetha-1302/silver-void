@@ -21,26 +21,36 @@ class FaceHandler {
             try {
                 console.log("[FaceHandler] Initializing AI Engines...");
 
-                // Set production mode for TFJS if available
+                // Set production mode for TFJS
                 if (faceapi.tf && faceapi.tf.env) {
                     faceapi.tf.env().set('DEBUG', false);
                 }
 
-                // Initialize backend only if not already set
-                if (!faceapi.tf.getBackend()) {
-                    await faceapi.tf.setBackend('webgl');
+                // Try WebGL first, fallback to CPU if it fails
+                try {
+                    if (!faceapi.tf.getBackend()) {
+                        await faceapi.tf.setBackend('webgl');
+                    }
+                    await faceapi.tf.ready();
+                } catch (e) {
+                    console.warn("[FaceHandler] WebGL not available, falling back to CPU");
+                    await faceapi.tf.setBackend('cpu');
+                    await faceapi.tf.ready();
                 }
-                await faceapi.tf.ready();
 
+                // Use relative path for models, compatible with Vite/Render
                 const MODEL_URL = '/models';
-                console.log("[FaceHandler] Loading Face AI Models...");
+                console.log("[FaceHandler] Loading Face AI Models from:", MODEL_URL);
 
                 await Promise.all([
                     faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
                     faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
                     faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
                     faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL)
-                ]);
+                ]).catch(err => {
+                    console.error("[FaceHandler] Specific model file missing:", err);
+                    throw new Error("Missing AI model files in /public/models");
+                });
 
                 this.isModelsLoaded = true;
                 console.log("[FaceHandler] Face AI Models Ready.");
