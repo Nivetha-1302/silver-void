@@ -6,7 +6,7 @@ const UserSchema = new mongoose.Schema({
     password: { type: String }, // Optional for face login users
     role: { type: String, enum: ['admin', 'employee'], default: 'employee' },
     department: { type: String, default: 'Engineering' },
-    employeeId: { type: String, unique: true },
+    employeeId: { type: String, unique: true, sparse: true },
     faceDescriptor: { type: Array }, // For face-api.js descriptors
     skills: [{
         name: String,
