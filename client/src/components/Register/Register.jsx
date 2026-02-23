@@ -265,7 +265,7 @@ const Register = () => {
                                                         name="department"
                                                         value={formData.department}
                                                         onChange={handleChange}
-                                                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all outline-none bg-white"
+                                                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all outline-none bg-white font-medium"
                                                     >
                                                         <option>Engineering</option>
                                                         <option>HR</option>
@@ -274,6 +274,32 @@ const Register = () => {
                                                         <option>Marketing</option>
                                                     </select>
                                                 </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium text-slate-700">Account Role</label>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setFormData({ ...formData, role: 'employee' })}
+                                                    className={`py-2 px-4 rounded-xl border text-sm font-bold transition-all ${formData.role === 'employee'
+                                                        ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-200'
+                                                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                                                        }`}
+                                                >
+                                                    Employee
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setFormData({ ...formData, role: 'admin' })}
+                                                    className={`py-2 px-4 rounded-xl border text-sm font-bold transition-all ${formData.role === 'admin'
+                                                        ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-200'
+                                                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                                                        }`}
+                                                >
+                                                    Admin
+                                                </button>
                                             </div>
                                         </div>
 
