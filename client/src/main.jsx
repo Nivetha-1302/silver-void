@@ -11,7 +11,7 @@ import axios from 'axios';
 const isProduction = window.location.hostname !== 'localhost';
 axios.defaults.baseURL = isProduction
   ? 'https://silver-void.onrender.com'
-  : 'https://localhost:5000';
+  : 'http://localhost:5000';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
