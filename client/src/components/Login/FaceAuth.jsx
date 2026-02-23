@@ -209,8 +209,8 @@ const FaceAuth = ({ onSwitchMethod }) => {
 
         <motion.div
           className={`absolute -bottom-4 left-1/2 transform -translate-x-1/2 px-6 py-2 rounded-2xl shadow-xl border backdrop-blur-xl z-10 ${status === 'verified' ? 'bg-emerald-500/90 border-emerald-400 text-white' :
-              status === 'error' ? 'bg-rose-500/90 border-rose-400 text-white' :
-                'bg-white/90 border-slate-200 text-slate-800'
+            status === 'error' ? 'bg-rose-500/90 border-rose-400 text-white' :
+              'bg-white/90 border-slate-200 text-slate-800'
             }`}
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
@@ -267,7 +267,5 @@ const FaceAuth = ({ onSwitchMethod }) => {
     </motion.div>
   );
 };
-
-export default FaceAuth;
 
 export default FaceAuth;
