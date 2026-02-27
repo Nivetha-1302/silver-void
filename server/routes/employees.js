@@ -61,6 +61,69 @@ router.get('/', async (req, res) => {
     }
 });
 
+// GET Gamification Leaderboard
+router.get('/gamification/leaderboard', async (req, res) => {
+    try {
+        const users = await User.find({ role: 'employee' });
+
+        const leaderboardData = await Promise.all(users.map(async (u) => {
+            const tasks = await Task.find({ assignee: u._id });
+            const completed = tasks.filter(t => t.status === 'Done').length;
+
+            const focus = u.metrics?.focusScore || 50;
+            const mood = u.metrics?.mood || 'Neutral';
+
+            // RPG Gamification Algorithm
+            let xp = 0;
+
+            // Base XP from Focus Score (0 - 1000)
+            xp += Math.round(focus * 10);
+
+            // 50 XP per completed task
+            xp += (completed * 50);
+
+            // Mood Multiplier Bonus
+            if (mood === 'Happy') xp += 200;
+            else if (mood === 'Focused') xp += 300;
+            else if (mood === 'Energetic') xp += 250;
+
+            // Determine Level (1 level per 500 XP)
+            const level = Math.max(1, Math.floor(xp / 500) + 1);
+
+            // Determine Badges
+            const badges = [];
+            if (focus > 90) badges.push({ name: 'Laser Focus', icon: '🎯', color: 'bg-emerald-100 text-emerald-600' });
+            if (completed > 5) badges.push({ name: 'Task Master', icon: '⚔️', color: 'bg-amber-100 text-amber-600' });
+            if (mood === 'Happy') badges.push({ name: 'Positive Aura', icon: '✨', color: 'bg-indigo-100 text-indigo-600' });
+            if (xp > 5000) badges.push({ name: 'Elite Guardian', icon: '🛡️', color: 'bg-slate-800 text-yellow-400' });
+
+            return {
+                id: u._id,
+                name: u.fullName,
+                department: u.department,
+                avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.email}&backgroundColor=c0aede,b6e3f4,ffdfbf`,
+                focusScore: focus,
+                tasksCompleted: completed,
+                xp: xp,
+                level: level,
+                badges: badges
+            };
+        }));
+
+        // Sort Highest XP downwards
+        leaderboardData.sort((a, b) => b.xp - a.xp);
+
+        // Add Ranks
+        leaderboardData.forEach((user, index) => {
+            user.rank = index + 1;
+        });
+
+        res.json(leaderboardData);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
 // POST Create Employee (Admin only really)
 router.post('/', async (req, res) => {
     try {

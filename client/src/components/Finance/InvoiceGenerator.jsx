@@ -3,6 +3,8 @@ import { motion } from 'framer-motion';
 import { FileText, Plus, Send, Check, Trash2, Printer } from 'lucide-react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 
 const InvoiceGenerator = () => {
     const [invoices, setInvoices] = useState([]);
@@ -66,6 +68,83 @@ const InvoiceGenerator = () => {
         } catch (err) {
             toast.error("Failed to create Invoice");
         }
+    };
+
+    const generatePDF = (inv) => {
+        const doc = new jsPDF();
+
+        // Header
+        doc.setFontSize(22);
+        doc.setTextColor(59, 130, 246); // Blue
+        doc.text('SmartTrack.ai', 14, 20);
+
+        doc.setFontSize(10);
+        doc.setTextColor(150);
+        doc.text('123 AI Parkway, Tech District', 14, 26);
+        doc.text('Silicon Valley, CA 94000', 14, 30);
+
+        doc.setFontSize(30);
+        doc.setTextColor(50);
+        doc.text('INVOICE', 140, 25);
+
+        // Meta Info
+        doc.setFontSize(10);
+        doc.text(`Invoice Number: ${inv.invoiceNumber}`, 140, 35);
+        doc.text(`Date Issued: ${new Date(inv.dateIssued).toLocaleDateString()}`, 140, 40);
+        doc.text(`Due Date: ${new Date(inv.dueDate).toLocaleDateString()}`, 140, 45);
+
+        // Billed To
+        doc.setFontSize(12);
+        doc.setTextColor(100);
+        doc.text('Billed To:', 14, 45);
+        doc.setFontSize(14);
+        doc.setTextColor(20);
+        doc.text(inv.clientName, 14, 52);
+        if (inv.clientEmail) {
+            doc.setFontSize(10);
+            doc.setTextColor(100);
+            doc.text(inv.clientEmail, 14, 57);
+        }
+
+        // Table
+        const tableColumn = ["Description", "Quantity", "Rate ($)", "Amount ($)"];
+        const tableRows = [];
+
+        inv.items.forEach(item => {
+            const rowData = [
+                item.description,
+                item.quantity,
+                item.rate.toFixed(2),
+                item.amount.toFixed(2)
+            ];
+            tableRows.push(rowData);
+        });
+
+        doc.autoTable({
+            startY: 70,
+            head: [tableColumn],
+            body: tableRows,
+            theme: 'grid',
+            headStyles: { fillColor: [59, 130, 246] },
+            margin: { top: 10 }
+        });
+
+        // Totals
+        const finalY = doc.lastAutoTable.finalY || 70;
+        doc.setFontSize(12);
+        doc.setTextColor(100);
+        doc.text('Total Amount Due:', 140, finalY + 15);
+        doc.setFontSize(16);
+        doc.setTextColor(20);
+        doc.text(`$${inv.totalAmount.toLocaleString()}`, 175, finalY + 15);
+
+        // Footer
+        doc.setFontSize(10);
+        doc.setTextColor(150);
+        doc.text('Thank you for your business!', 105, 280, null, null, 'center');
+
+        doc.save(`${inv.invoiceNumber}_${inv.clientName.replace(/\s+/g, '_')}.pdf`);
+        toast.success(`Downloading Print for ${inv.invoiceNumber}`);
     };
 
     return (
@@ -205,7 +284,7 @@ const InvoiceGenerator = () => {
                                 <span className="font-black text-xl text-gray-900">${inv.totalAmount.toLocaleString()}</span>
                             </div>
                             <div className="flex gap-2">
-                                <button className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 text-gray-600" title="Print"><Printer className="w-4 h-4" /></button>
+                                <button className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 text-gray-600" title="Print" onClick={() => generatePDF(inv)}><Printer className="w-4 h-4" /></button>
                                 <button className="p-2 bg-blue-600 rounded-lg hover:bg-blue-700 text-white shadow-lg shadow-blue-500/30" title="Send"><Send className="w-4 h-4" /></button>
                             </div>
                         </div>

@@ -1,0 +1,85 @@
+# Project Description
+
+## 1.1 Introduction
+The SmartTrack AI (Smart Employee Movement Monitoring System) is an enterprise-grade, comprehensive platform leveraging artificial intelligence, computer vision, and real-time telemetry to seamlessly track attendance, productivity, and physical movements of an organization's workforce. Utilizing a blend of Facial Recognition, RFID simulations, Screen Activity Monitoring, and Natural Language Processing, it replaces disparate legacy systems with a unified mission-control dashboard. It enforces strict compliance while preserving data integrity in an increasingly complex hybrid-work or large facility environment.
+
+## 1.2 Existing System
+Currently, most enterprises utilize legacy solutions defined by isolated endpoints:
+- **Biometric Terminals:** Distinct fingerprint or card readers placed statically at gates, offering no real-time correlation.
+- **Siloed Time-Tracking:** Software requiring manual check-ins resulting in 'time-theft' or forgotten entries.
+- **Limited Security Context:** CCTV footage that requires manual post-incident review rather than proactive, intelligent threat detection.
+- **Lacking Analytics:** Absence of cross-referenced insights concerning task-sentiment, location-duration, or digital productivity.
+
+## 1.3 Proposed System
+SmartTrack AI eliminates the blind spots by providing an overarching, interconnected network. Employees are authenticated biometrically via AI face-scanning. Physical movement across abstract 'Virtual Zones' (e.g., Canteens, Main Gates) is logged autonomously, while parallel telemetry records digital productivity (Idle vs Active times, App usages). The system introduces advanced additions such as Real-Time CCTV screen broadcasting, Gamified Leaderboards to foster engagement, and an NLP-driven sentiment analyzer assessing task stress levels, ultimately presenting a comprehensive behavioral layout of an organization.
+
+### 1.3.1 Hardware Specification
+- **Client (End-User):** Minimum Quad-Core Processor (x64), 8GB RAM, Web Camera (720p+ for Face API), Ethernet/High-Speed Wi-Fi, Modern Web Browser (Chrome/Edge supporting WebRTC).
+- **Server Platform:** Cloud Virtual Machine (e.g., AWS EC2 t3.medium or higher) or physical server, minimum 4 vCPUs, 16GB RAM for concurrent Node.js Socket connections.
+- **Physical Nodes (Optional):** Emulated through VirtualZone components, hardware could consist of IP Cameras, Raspberry Pi units configured as IoT gateways for RFID bridging.
+
+### 1.3.2 Software Specification
+- **Frontend Stack:** React 18, Vite, Tailwind CSS, Framer Motion, Recharts, Lucide-React, jsPDF (for Invoice rendering), face-api.js.
+- **Backend Stack:** Node.js, Express.js, Socket.IO (for WebSocket bi-directional streams).
+- **Database:** MongoDB (via Mongoose ODMs).
+- **Runtime Environment:** local Node v18+ runtime, NPM for package management.
+
+# Logical Development
+
+## 2.1 Architectural Design
+The architecture follows a standard MVC (Model-View-Controller) adapted for a MERN stack.
+1. **Presentation Layer (React):** Handles state management, local face mapping via Tensor models, and UI rendering. Connects to backend purely via REST endpoints and Sockets.
+2. **Business Logic Layer (Express):** Routes handling Auth, Monitoring logic, KPI crunching, Payroll mathematics, and PDF stream generation. Operates a dedicated 'Rules Engine' for constant state validation.
+3. **Data Layer (MongoDB):** Central cluster handling document storage of varying schemas, enforcing relational integrity (e.g., User IDs mapping to Task IDs).
+
+## 2.2 Data Flow Diagram
+**Level 0 (Context):**
+[Employee/Admin] <---> [SmartTrack API Gateway] <---> [MongoDB Cloud]
+**Level 1 (Core Flow):**
+1. [Employee] -> Submits Face Image -> [Client Face-API] -> Creates/Validates Biometric Descriptor -> [Auth Route].
+2. [Employee] -> Switches Apps -> [WorkSpace Tracker] -> Triggers WebSocket Event -> [Server Socket Receiver] -> Broadcasts to [Admin Live Feed].
+3. [Manager] -> Formulates Task -> [NLP Route] -> NLP checks Sentiment -> Stores in [Task Collection].
+4. [Admin] -> Requests Reports -> [Backend Report Engine] -> Compiles JSON -> [Client Table / PDF Exporter].
+
+# Database Design
+
+## 3.1. Table (Schema) Design
+Primary Collections used in MongoDB:
+- **USERS:** (fullName, email, password (hashed), role, faceDescriptor, employeeId, baseSalary)
+- **ZONELOGS:** (userId, zone, action (ENTER/EXIT), timestamp)
+- **ACTIVITYLOGS:** (userId, activityType, duration, focusScore, timestamp)
+- **TASKS:** (title, description, assignee, priority, status, aiSentiment [score, label])
+- **INVOICES:** (invoiceNumber, clientName, items[desc, amount], total, status)
+- **SECURITYLOGS:** (userId, type, details, severity)
+
+## 3.2. Data Dictionary
+- `faceDescriptor` (Array of Floats): The neural mathematical embedding of the user's face used for distance comparison.
+- `aiSentiment` (Object): Contains numerical score and string label (Positive, Neutral, Stressed, Critical).
+- `focusScore` (Int): Calculated integer 0-100 indicating productivity efficiency.
+
+## 3.3. Relationship Diagram
+(Descriptive)
+- 1 User -> Many ZoneLogs (1:N)
+- 1 User -> Many ActivityLogs (1:N)
+- 1 User -> Many Assigned Tasks (1:N)
+- 1 System -> Many Invoices (1:N, detached unless bound to specific sales user in future iteration)
+
+# Program Design
+
+- **Auth Module (`server/routes/auth.js`):** Intercepts login credentials. Critically handles saving `Float32Array` representations of faces against user accounts and returning JWT tokens.
+- **Monitoring/Telemetry (`EmployeeWorkspace.jsx` / `server/routes/monitoring.js`):** Polls the local browser state. Aggregates idle vs active durations, constructs base64 screen intervals, and pushes objects to the server via Sockets for low-latency observation.
+- **AI Task Engine (`server/routes/tasks.js`):** Houses the `analyzeSentiment(title, description)` function. Uses localized pre-defined weighted datasets of trigger words to heuristically map string inputs to psychiatric stress tiers.
+- **PDF Core (`InvoiceGenerator.jsx`):** Employs `jsPDF-autotable`. Reads the localized DOM state of an invoice, initializes an A4 document grid, paints standard formatting elements, and invokes the `save()` browser hook.
+
+# Testing
+- **Unit Testing (Implicit):** Logical isolation of the AI Sentiment function testing boundary string values.
+- **Integration Testing:** Observing the full handshake between React Socket pushing a screenshot and the React Admin UI receiving it accurately within 2 seconds.
+- **Validation Screen Justifications:**
+  - Login Registration checks whether an array consists of exact 128 elements before committing the face descriptor.
+  - Form restrictions prevent submitting partial Invoice line items.
+
+# Conclusion
+SmartTrack AI provides a hardened, robust solution pushing the boundaries of traditional HR software. By leveraging edge AI capabilities inside the browser (face-api) offloading server load, and augmenting it with centralized real-time analysis, the enterprise gains unparalleled visibility and security over physical and digital operational flow.
+
+# Source Code
+(Please refer to the Git Repository containing modularized `/client` and `/server` codebases).

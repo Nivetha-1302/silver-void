@@ -1,0 +1,39 @@
+# Algorithms and Models Utilized
+
+## 1. Biometric Identification Module (Face Scanning)
+- **Model / Library**: `face-api.js` (Built on top of TensorFlow.js core)
+- **Algorithms**:
+  - **SSD Mobilenet V1**: Used by the system specifically for face-detection (bounding boxes). It is an incredibly optimized Single Shot Multibox Detector layered upon the MobileNet backbone to run exclusively and rapidly entirely on client edge devices (web browser).
+  - **Face Landmarker (68 Points)**: Computes 68 2D-landmark points of a face (eyes, nose, mouth contours).
+  - **Face Recognition Net (ResNet-34)**: Computes a `Float32Array(128)` feature vector describing the face. The algorithm measures the Euclidean Distance between two descriptors (Registration vs Login) to mathematically define identity matching. A threshold variance of generally under `0.45` is required for access.
+
+## 2. Gamified AI XP Allocation (HR Module)
+- **Model / Algorithm**: Custom Heuristic Point System Controller.
+- **Algorithms**:
+  - Applies a weighted point distribution formula mapping activity thresholds to discrete tiers (Bronze, Silver, Gold).
+  - Formula: `TotalXP = (Tasks Completed * 50) + (Productivity Score * 1.5) - (Security Flags * 200)`
+  - Distributes the payload via a reactive React UI mapping the internal array structure sorted by descending XP.
+
+## 3. Cognitive Task Sentiment Analyzer (NLP Integration)
+- **Model / Algorithm**: Custom Key-Value Weight Matrix (Rule-Based NLP).
+- **Algorithms**:
+  - The module scans strings applying a tokenization loop across Space delimiters (`split(' ')`) followed by `.toLowerCase()`.
+  - Employs a weighting algorithm assessing frequencies of 'Critical Words' (+3 points), 'Stress Words' (+2 points), and 'Positive Words' (-1 point).
+  - The sum (`sentimentScore`) translates string values to finite label buckets:
+    - Score > 4 = `Critical`
+    - Score >= 2 = `Stressed`
+    - Score <= 0 = `Positive`
+    - Else = `Neutral`.
+
+## 4. CCTV Screen Telemetry Engine (Security Module)
+- **Model / Algorithm**: Browser Context Isolation & WebRTC Polling.
+- **Algorithms**:
+  - Polls `window.onblur`, `window.onfocus`, and `document.hidden` properties on an endless interval evaluating `Date.now()`.
+  - Takes full screen snapshots compressing them into Base64 lossy-jpegs utilizing the hidden `<canvas>` to `.toDataURL('image/jpeg', 0.5)` logic to save vast bandwidth limits.
+  - Broadcasts payloads via low-latency Socket.io utilizing UDP-like event streams.
+
+## 5. Invoice Generation Engine (Finance Module)
+- **Model / Algorithm**: Layout Computation using `jsPDF`.
+- **Algorithms**:
+  - Computes vertical/horizontal absolute layout boundaries mapping iterative data grids (line items).
+  - Implements Cartesian geometry coordinate positioning (e.g., `doc.text(string, 14, 20)`) and math parsing `parseFloat()` mapping to `reduce()` summing operations for grand totals.

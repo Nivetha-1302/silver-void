@@ -74,6 +74,8 @@ const Reports = () => {
                 res = await axios.get('/api/monitoring/apps-report');
             } else if (type === 'PRODUCTIVITY') {
                 res = await axios.get('/api/monitoring/activity-report');
+            } else if (type === 'AUDIT') {
+                res = await axios.get('/api/monitoring/audit-logs');
             }
             if (res && res.data) setReportData(res.data);
         } catch (err) {
@@ -87,17 +89,23 @@ const Reports = () => {
         const dataToExport = reportType === 'SUMMARY' ? liveStatusData : reportData;
         if (!dataToExport.length) return alert("No data to export");
 
-        const headers = Object.keys(dataToExport[0]);
+        const headers = Object.keys(dataToExport[0]).filter(k => k !== '_id' && k !== '__v' && k !== 'userId'); // Cleanup keys
         const csvContent = [
             headers.join(','),
-            ...dataToExport.map(row => headers.map(fieldName => JSON.stringify(row[fieldName] || '')).join(','))
+            ...dataToExport.map(row => headers.map(fieldName => {
+                let val = row[fieldName];
+                if (typeof val === 'object' && val !== null) {
+                    val = JSON.stringify(val); // In case it's an object like userId
+                }
+                return JSON.stringify(val || '');
+            }).join(','))
         ].join('\n');
 
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement("a");
         const url = URL.createObjectURL(blob);
         link.setAttribute("href", url);
-        link.setAttribute("download", `${reportType.toLowerCase()}_report.csv`);
+        link.setAttribute("download", `${reportType.toLowerCase()}_compliance_report.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -111,6 +119,8 @@ const Reports = () => {
                 return ['Employee', 'Date', 'App Name', 'Category', 'Duration'];
             case 'PRODUCTIVITY':
                 return ['Employee', 'Date', 'Active Time', 'Idle Time', 'Productivity Score'];
+            case 'AUDIT':
+                return ['User / Instance', 'Timestamp', 'Event Type', 'Details', 'Severity'];
             default: // SUMMARY
                 return ['Employee', 'Role', 'Current Status', 'Last Seen', 'Live Productivity'];
         }
@@ -119,46 +129,63 @@ const Reports = () => {
     const renderTableRows = () => {
         const data = reportType === 'SUMMARY' ? liveStatusData : reportData;
 
-        if (loading) return <tr><td colSpan="6" className="p-6 text-center text-gray-500">Loading Report Data...</td></tr>;
-        if (!data.length) return <tr><td colSpan="6" className="p-6 text-center text-gray-400">No records found.</td></tr>;
+        if (loading) return <tr><td colSpan="6" className="p-6 text-center text-gray-500 dark:text-gray-400">Loading Report Data...</td></tr>;
+        if (!data.length) return <tr><td colSpan="6" className="p-6 text-center text-gray-400 dark:text-gray-500">No records found.</td></tr>;
 
         return data.map((row, idx) => (
-            <tr key={idx} className="hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-0">
+            <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors border-b border-gray-100 dark:border-slate-700 last:border-0">
                 {reportType === 'ATTENDANCE' && (
                     <>
-                        <td className="px-6 py-4 font-medium text-gray-900">{row.employee}</td>
-                        <td className="px-6 py-4 text-gray-600">{row.date}</td>
-                        <td className="px-6 py-4 text-green-600 font-mono">{row.in}</td>
-                        <td className="px-6 py-4 text-red-600 font-mono">{row.out}</td>
-                        <td className="px-6 py-4 font-bold text-gray-800">{row.duration}</td>
-                        <td className="px-6 py-4"><span className={`px-2 py-1 rounded text-xs font-bold ${row.status === 'Late' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>{row.status}</span></td>
+                        <td className="px-6 py-4 font-medium text-gray-900 dark:text-white">{row.employee}</td>
+                        <td className="px-6 py-4 text-gray-600 dark:text-gray-300">{row.date}</td>
+                        <td className="px-6 py-4 text-green-600 dark:text-emerald-400 font-mono">{row.in}</td>
+                        <td className="px-6 py-4 text-red-600 dark:text-rose-400 font-mono">{row.out}</td>
+                        <td className="px-6 py-4 font-bold text-gray-800 dark:text-gray-200">{row.duration}</td>
+                        <td className="px-6 py-4"><span className={`px-2 py-1 rounded text-xs font-bold ${row.status === 'Late' ? 'bg-red-100 text-red-800 dark:bg-rose-500/20 dark:text-rose-300' : 'bg-green-100 text-green-800 dark:bg-emerald-500/20 dark:text-emerald-300'}`}>{row.status}</span></td>
                     </>
                 )}
                 {reportType === 'APPS' && (
                     <>
-                        <td className="px-6 py-4 font-medium text-gray-900">{row.employee}</td>
-                        <td className="px-6 py-4 text-gray-600">{row.date}</td>
-                        <td className="px-6 py-4 text-blue-600 font-medium">{row.app}</td>
-                        <td className="px-6 py-4 text-gray-500 text-sm">{row.category}</td>
-                        <td className="px-6 py-4 font-mono">{row.duration}</td>
+                        <td className="px-6 py-4 font-medium text-gray-900 dark:text-white">{row.employee}</td>
+                        <td className="px-6 py-4 text-gray-600 dark:text-gray-300">{row.date}</td>
+                        <td className="px-6 py-4 text-blue-600 dark:text-indigo-400 font-medium">{row.app}</td>
+                        <td className="px-6 py-4 text-gray-500 dark:text-gray-400 text-sm">{row.category}</td>
+                        <td className="px-6 py-4 font-mono dark:text-gray-300">{row.duration}</td>
                     </>
                 )}
                 {reportType === 'PRODUCTIVITY' && (
                     <>
-                        <td className="px-6 py-4 font-medium text-gray-900">{row.employee}</td>
-                        <td className="px-6 py-4 text-gray-600">{row.date}</td>
-                        <td className="px-6 py-4 text-green-600">{row.activeInfo}</td>
-                        <td className="px-6 py-4 text-yellow-600">{row.idleInfo}</td>
-                        <td className="px-6 py-4 font-bold text-blue-600">{row.score}</td>
+                        <td className="px-6 py-4 font-medium text-gray-900 dark:text-white">{row.employee}</td>
+                        <td className="px-6 py-4 text-gray-600 dark:text-gray-300">{row.date}</td>
+                        <td className="px-6 py-4 text-green-600 dark:text-emerald-400">{row.activeInfo}</td>
+                        <td className="px-6 py-4 text-yellow-600 dark:text-amber-400">{row.idleInfo}</td>
+                        <td className="px-6 py-4 font-bold text-blue-600 dark:text-indigo-400">{row.score}</td>
                     </>
                 )}
                 {reportType === 'SUMMARY' && (
                     <>
-                        <td className="px-6 py-4 font-medium text-gray-900">{row.employee}</td>
-                        <td className="px-6 py-4 text-gray-600">{row.role}</td>
-                        <td className="px-6 py-4">{row.status}</td>
-                        <td className="px-6 py-4 font-mono text-xs">{row.lastSeen}</td>
-                        <td className="px-6 py-4">{row.productivity}</td>
+                        <td className="px-6 py-4 font-medium text-gray-900 dark:text-white">{row.employee}</td>
+                        <td className="px-6 py-4 text-gray-600 dark:text-gray-300">{row.role}</td>
+                        <td className="px-6 py-4 dark:text-gray-200">{row.status}</td>
+                        <td className="px-6 py-4 font-mono text-xs dark:text-gray-400">{row.lastSeen}</td>
+                        <td className="px-6 py-4 dark:text-gray-200">{row.productivity}</td>
+                    </>
+                )}
+                {reportType === 'AUDIT' && (
+                    <>
+                        <td className="px-6 py-4 font-medium text-gray-900 dark:text-white">{row.userId?.fullName || 'System'}</td>
+                        <td className="px-6 py-4 text-gray-600 dark:text-gray-300">{new Date(row.timestamp).toLocaleString()}</td>
+                        <td className="px-6 py-4 font-mono font-bold text-gray-800 dark:text-gray-200">{row.type}</td>
+                        <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">{row.details || '-'}</td>
+                        <td className="px-6 py-4">
+                            <span className={`px-2 py-1 rounded text-[10px] font-black tracking-widest uppercase ${row.severity === 'CRITICAL' ? 'bg-rose-100 text-rose-800 border-rose-200 border' :
+                                    row.severity === 'HIGH' ? 'bg-orange-100 text-orange-800 border-orange-200 border' :
+                                        row.severity === 'LOW' ? 'bg-emerald-100 text-emerald-800 border-emerald-200 border' :
+                                            'bg-yellow-100 text-yellow-800 border-yellow-200 border'
+                                }`}>
+                                {row.severity}
+                            </span>
+                        </td>
                     </>
                 )}
             </tr>
@@ -167,31 +194,31 @@ const Reports = () => {
 
     return (
 
-        <div className="p-8 h-full bg-gray-50 text-gray-800 flex flex-col">
+        <div className="p-8 h-full bg-gray-50 dark:bg-slate-900 text-gray-800 dark:text-gray-100 flex flex-col transition-colors">
             <div className="flex justify-between items-center mb-8 shrink-0">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900">Reports Center</h1>
-                    <p className="text-gray-500">
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Reports Center</h1>
+                    <p className="text-gray-500 dark:text-gray-400">
                         {reportType === 'SUMMARY' ? 'Real-time overview' : `${reportType.charAt(0) + reportType.slice(1).toLowerCase()} Report`}
                     </p>
                 </div>
                 <div className="flex gap-4">
                     {reportType !== 'SUMMARY' && (
-                        <button onClick={() => setReportType('SUMMARY')} className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg flex items-center gap-2 hover:bg-gray-300">
+                        <button onClick={() => setReportType('SUMMARY')} className="px-4 py-2 bg-gray-200 dark:bg-slate-800 text-gray-700 dark:text-gray-300 rounded-lg flex items-center gap-2 hover:bg-gray-300 dark:hover:bg-slate-700 transition-colors">
                             <ChevronLeft className="w-4 h-4" /> Back
                         </button>
                     )}
-                    <button onClick={() => reportType === 'SUMMARY' ? fetchSummaryData() : fetchReport(reportType)} className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-gray-700 flex items-center gap-2 hover:bg-gray-50">
+                    <button onClick={() => reportType === 'SUMMARY' ? fetchSummaryData() : fetchReport(reportType)} className="px-4 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-gray-700 dark:text-gray-300 flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
                         <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
                     </button>
-                    <button onClick={handleExportCSV} className="px-4 py-2 bg-blue-600 text-white rounded-lg flex items-center gap-2 hover:bg-blue-700 shadow-sm">
-                        <Download className="w-4 h-4" /> Export CSV
+                    <button onClick={handleExportCSV} className="px-4 py-2 bg-blue-600 dark:bg-indigo-600 text-white rounded-lg flex items-center gap-2 hover:bg-blue-700 dark:hover:bg-indigo-700 shadow-sm transition-colors font-bold shadow-blue-500/30">
+                        <Download className="w-4 h-4" /> Export CSV Log
                     </button>
                 </div>
             </div>
 
             {reportType === 'SUMMARY' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8 shrink-0">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 shrink-0">
                     <div onClick={() => fetchReport('ATTENDANCE')}>
                         <ReportTypeCard title="Attendance Report" desc="Clock-in/out times, late arrivals." />
                     </div>
@@ -201,25 +228,28 @@ const Reports = () => {
                     <div onClick={() => fetchReport('PRODUCTIVITY')}>
                         <ReportTypeCard title="Productivity Timeline" desc="Detailed breakdown of active vs idle time." />
                     </div>
+                    <div onClick={() => fetchReport('AUDIT')}>
+                        <ReportTypeCard title="Compliance & Audit" desc="SOC2 / ISO27001 Security Logs." />
+                    </div>
                 </div>
             )}
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex-1 flex flex-col">
-                <div className="p-6 border-b border-gray-100 bg-gray-50 flex justify-between items-center shrink-0">
-                    <h3 className="font-bold text-gray-700">
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden flex-1 flex flex-col transition-colors">
+                <div className="p-6 border-b border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 flex justify-between items-center shrink-0">
+                    <h3 className="font-bold text-gray-700 dark:text-gray-200">
                         {reportType === 'SUMMARY' ? 'Live Status Log' : 'Detailed Data View'}
                     </h3>
                 </div>
                 <div className="overflow-auto flex-1">
-                    <table className="w-full text-left bg-white">
-                        <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider border-b border-gray-100 sticky top-0">
+                    <table className="w-full text-left bg-white dark:bg-slate-800">
+                        <thead className="bg-gray-50 dark:bg-slate-900/50 text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider border-b border-gray-100 dark:border-slate-700 sticky top-0">
                             <tr>
                                 {renderTableHeaders().map(h => (
                                     <th key={h} className="px-6 py-4 font-semibold">{h}</th>
                                 ))}
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-100">
+                        <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
                             {renderTableRows()}
                         </tbody>
                     </table>

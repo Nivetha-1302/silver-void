@@ -15,7 +15,8 @@ import {
     BarChart3,
     Video,
     MapPin,
-    DollarSign
+    DollarSign,
+    Trophy
 } from 'lucide-react';
 
 const Sidebar = ({ sidebarOpen, toggleSidebar }) => {
@@ -26,6 +27,7 @@ const Sidebar = ({ sidebarOpen, toggleSidebar }) => {
         { path: '/dashboard', label: 'Overview', icon: LayoutDashboard },
         { path: '/live-feed', label: 'Live Operations', icon: Video },
         { path: '/productivity', label: 'Productivity', icon: Activity },
+        { path: '/leaderboard', label: 'Gamification Board', icon: Trophy },
         { path: '/reports', label: 'Analytics & Reports', icon: BarChart3 },
         { path: '/hr', label: 'Workforce', icon: Users },
         { path: '/attendance', label: 'Attendance', icon: Clock },

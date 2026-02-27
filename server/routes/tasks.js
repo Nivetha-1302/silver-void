@@ -49,6 +49,29 @@ const findBestAssignee = async (requiredSkills) => {
     }
 };
 
+// --- AI Algorithm: Task Sentiment & Stress Analyzer ---
+// Scans for urgency, blockers, or aggressive wording to flag stressed/critical tasks 
+const analyzeSentiment = (title, text) => {
+    const combined = `${title || ''} ${text || ''}`.toLowerCase();
+    let score = 0;
+
+    // Weighted keywords
+    const criticalWords = ['urgent', 'asap', 'failing', 'crash', 'critical', 'blocker', 'broken', 'breach', 'alert'];
+    const stressWords = ['stuck', 'hard', 'struggling', 'behind', 'late', 'delay', 'issue', 'bug', 'error'];
+    const positiveWords = ['great', 'easy', 'fix', 'completed', 'success', 'smooth', 'bonus', 'clean'];
+
+    criticalWords.forEach(w => { if (combined.includes(w)) score -= 3; });
+    stressWords.forEach(w => { if (combined.includes(w)) score -= 1; });
+    positiveWords.forEach(w => { if (combined.includes(w)) score += 1.5; });
+
+    let label = 'Neutral';
+    if (score < -5) label = 'Critical';
+    else if (score < -1) label = 'Stressed';
+    else if (score > 2) label = 'Positive';
+
+    return { score, label };
+};
+
 // GET All Tasks
 router.get('/', async (req, res) => {
     try {
@@ -59,13 +82,16 @@ router.get('/', async (req, res) => {
     }
 });
 
-// POST Create Task (with AI Auto-Assign option)
+// POST Create Task (with AI Auto-Assign & Sentiment Detection)
 router.post('/', async (req, res) => {
     try {
         const { title, description, priority, requiredSkills, autoAssign } = req.body;
 
         let assigneeId = req.body.assignee;
         let aiScore = 0;
+
+        // Run Sentiment Check
+        const aiSentiment = analyzeSentiment(title, description);
 
         if (autoAssign) {
             const result = await findBestAssignee(requiredSkills);
@@ -81,7 +107,8 @@ router.post('/', async (req, res) => {
             priority,
             requiredSkills,
             assignee: assigneeId,
-            aiScore
+            aiScore,
+            aiSentiment
         });
 
         await newTask.save();

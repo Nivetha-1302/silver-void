@@ -13,38 +13,65 @@ const VirtualZoneDashboard = () => {
     ]);
 
     const [logs, setLogs] = useState([]);
-    const [isAutoMode, setIsAutoMode] = useState(false); // Toggle for auto-simulation
-    const [realUsers, setRealUsers] = useState([]); // Store fetched users
+    const activeUsersRef = useRef([]);
 
-    // Fetch Real Users on Mount
+    // Live Data Fetching
     useEffect(() => {
-        const fetchUsers = async () => {
+        const fetchActiveZones = async () => {
             try {
-                const res = await axios.get('/api/auth/users');
-                if (res.data && res.data.length > 0) {
-                    setRealUsers(res.data.map(u => u.fullName));
+                const res = await axios.get('/api/zones/active');
+                const activeData = res.data;
+
+                setCameras(prevCams => {
+                    const newCams = [...prevCams];
+                    // Reset currentPerson
+                    newCams.forEach(c => c.currentPerson = null);
+
+                    activeData.forEach(log => {
+                        let camId = '';
+                        if (log.zone === 'Main Gate') camId = 'gate';
+                        if (log.zone === 'Canteen') camId = 'canteen';
+                        if (log.zone === 'Workstation') camId = 'workfloor';
+
+                        const cam = newCams.find(c => c.id === camId);
+                        if (cam) {
+                            // Multiple users can be in a zone, for UI we just show the latest or append
+                            // For this simple UI, we show the string of names 
+                            if (cam.currentPerson) {
+                                cam.currentPerson += `, ${log.userId.fullName}`;
+                            } else {
+                                cam.currentPerson = log.userId.fullName;
+                            }
+                            cam.isFlashing = true; // Briefly flash if they just appeared
+                            setTimeout(() => setCameras(cc => cc.map(c => c.id === camId ? { ...c, isFlashing: false } : c)), 1000);
+                        }
+                    });
+                    return newCams;
+                });
+
+                // Detect changes to generate logs
+                const currentActiveStr = JSON.stringify(activeData.map(d => d._id));
+                if (activeUsersRef.current !== currentActiveStr) {
+                    activeUsersRef.current = currentActiveStr;
+                    // In a real robust system, we would calculate deltas. Here we rely on socket for real-time logs.
                 }
-            } catch (err) {
-                console.error("Error fetching users for simulation:", err);
-            }
+
+            } catch (err) { }
         };
-        fetchUsers();
+
+        const interval = setInterval(fetchActiveZones, 2000);
+        fetchActiveZones();
+
+        // Listen for new scans directly via DB updates or just let polling handle it
+        return () => clearInterval(interval);
     }, []);
 
-    // Live Socket Updates (Real Data)
+    // Also listen to Socket for immediate events from Workstation Monitor
     useEffect(() => {
         const handleUpdate = (data) => {
-            // Update Workfloor Camera with real socket data if available
-            setCameras(prev => prev.map(cam =>
-                cam.id === 'workfloor' ? {
-                    ...cam,
-                    currentPerson: 'Active User',
-                    status: data.status,
-                    focus: data.focusScore
-                } : cam
-            ));
-
-            if (data.phoneDetected || data.status.includes('Distracted')) {
+            if (data.status.includes('Scanned')) {
+                addLog(data.status.includes('Gate') ? 'gate' : data.status.includes('Canteen') ? 'canteen' : 'workfloor', 'Employee', 'ZONE ACCESS', false);
+            } else if (data.phoneDetected || data.status.includes('Distracted')) {
                 addLog('workfloor', 'Active User', 'POLICY VIOLATION', true);
             }
         };
@@ -52,21 +79,6 @@ const VirtualZoneDashboard = () => {
         socket.on('dashboard_update', handleUpdate);
         return () => socket.off('dashboard_update', handleUpdate);
     }, []);
-
-    // Auto-Simulation Logic
-    useEffect(() => {
-        let interval;
-        if (isAutoMode && realUsers.length > 0) {
-            interval = setInterval(() => {
-                // Pick a random camera and user (from REAL users)
-                const randomCam = cameras[Math.floor(Math.random() * cameras.length)];
-                const randomUser = realUsers[Math.floor(Math.random() * realUsers.length)];
-
-                triggerDetection(randomCam.id, randomUser);
-            }, 3000); // Event every 3 seconds
-        }
-        return () => clearInterval(interval);
-    }, [isAutoMode, cameras, realUsers]);
 
     const addLog = (camId, person, event, isAlert = false) => {
         const camName = cameras.find(c => c.id === camId)?.name || camId;
@@ -79,35 +91,6 @@ const VirtualZoneDashboard = () => {
             isAlert: isAlert
         };
         setLogs(prev => [newLog, ...prev.slice(0, 8)]); // Keep last 8 logs
-    };
-
-    const triggerDetection = (camId, personName) => {
-        const timestamp = new Date().toLocaleTimeString();
-
-        // Flash the camera state
-        setCameras(prev => prev.map(cam =>
-            cam.id === camId ? { ...cam, currentPerson: personName, lastSeen: timestamp, isFlashing: true } : cam
-        ));
-
-        // Remove flash after delay
-        setTimeout(() => {
-            setCameras(prev => prev.map(cam =>
-                cam.id === camId ? { ...cam, isFlashing: false } : cam
-            ));
-        }, 1000);
-
-        // Determine event type based on zone
-        let event = 'Access Granted';
-        let isAlert = false;
-
-        if (camId === 'workfloor' && Math.random() > 0.8) {
-            event = 'Unauthorized Device';
-            isAlert = true;
-        } else if (camId === 'gate') {
-            event = 'Entry Logged';
-        }
-
-        addLog(camId, personName, event, isAlert);
     };
 
     return (
@@ -125,22 +108,8 @@ const VirtualZoneDashboard = () => {
                 <div className="flex items-center gap-4">
                     <div className="flex items-center gap-2 bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg border border-blue-100 text-xs font-bold font-mono">
                         <Activity className="w-4 h-4 animate-pulse" />
-                        AI DETECTION ACTIVE
+                        LIVE ZONE TRACKING
                     </div>
-
-                    <button
-                        onClick={() => setIsAutoMode(!isAutoMode)}
-                        disabled={realUsers.length === 0}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all shadow-sm ${isAutoMode
-                            ? 'bg-green-500 text-white hover:bg-green-600 shadow-green-200'
-                            : realUsers.length === 0
-                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
-                            }`}
-                    >
-                        <Clock className={`w-4 h-4 ${isAutoMode ? 'animate-spin' : ''}`} />
-                        {realUsers.length === 0 ? 'No Employees Found in DB' : (isAutoMode ? 'Auto-Simulation ON' : 'Start Simulation')}
-                    </button>
                 </div>
             </div>
 

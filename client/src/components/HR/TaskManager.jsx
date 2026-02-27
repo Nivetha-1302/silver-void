@@ -150,12 +150,25 @@ const TaskManager = () => {
 
                         <div className="mb-2">
                             <div className="flex justify-between items-start">
-                                <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium mb-2 inline-block ${task.priority === 'High' ? 'bg-red-50 text-red-600 border border-red-100' :
-                                    task.priority === 'Medium' ? 'bg-yellow-50 text-yellow-600 border border-yellow-100' :
-                                        'bg-green-50 text-green-600 border border-green-100'
-                                    }`}>
-                                    {task.priority} Priority
-                                </span>
+                                <div className="flex flex-col gap-1 items-start">
+                                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium inline-block ${task.priority === 'High' ? 'bg-red-50 text-red-600 border border-red-100' :
+                                        task.priority === 'Medium' ? 'bg-yellow-50 text-yellow-600 border border-yellow-100' :
+                                            'bg-green-50 text-green-600 border border-green-100'
+                                        }`}>
+                                        {task.priority} Priority
+                                    </span>
+                                    {task.aiSentiment && task.aiSentiment.label !== 'Neutral' && (
+                                        <span className={`text-[9px] px-1.5 py-0.5 rounded flex items-center gap-1 font-bold tracking-widest uppercase ${task.aiSentiment.label === 'Critical' ? 'bg-rose-100 text-rose-700 border border-rose-200' :
+                                                task.aiSentiment.label === 'Stressed' ? 'bg-orange-100 text-orange-700 border border-orange-200' :
+                                                    'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                                            }`}>
+                                            {task.aiSentiment.label === 'Critical' && <AlertCircle className="w-2.5 h-2.5" />}
+                                            {task.aiSentiment.label === 'Stressed' && <Clock className="w-2.5 h-2.5" />}
+                                            {task.aiSentiment.label === 'Positive' && <Sparkles className="w-2.5 h-2.5" />}
+                                            {task.aiSentiment.label}
+                                        </span>
+                                    )}
+                                </div>
                                 {task.aiScore > 0 && (
                                     <span className="text-[10px] flex items-center gap-1 text-purple-600 font-medium">
                                         <BrainCircuit className="w-3 h-3" /> {task.aiScore}% Match

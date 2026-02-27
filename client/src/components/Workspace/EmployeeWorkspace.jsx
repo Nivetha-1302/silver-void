@@ -149,6 +149,7 @@ const EmployeeWorkspace = () => {
         stateRef.current.postureStatus = postureStatus;
     }, [status, focusScore, mood, lastActivityTime, postureStatus]);
 
+    const [securityThreat, setSecurityThreat] = useState(null); // 'AWAY', 'MULTIPLE_FACES', null
     const [latency, setLatency] = useState(0);
 
     // 2. The "Spy" Loop (Runs every 1s)
@@ -167,22 +168,28 @@ const EmployeeWorkspace = () => {
             const lastActive = stateRef.current.lastActivityTime;
             const currentPosture = stateRef.current.postureStatus;
 
-            let faceDetected = false;
+            let faceCount = 0;
             let detectedGaze = 'Unknown';
             let isPhone = false;
+            let mainFace = null;
 
-            // A. FACE & GAZE DETECTION (Optimized for single user)
+            // A. FACE & GAZE DETECTION (Upgraded to Multi-Face Security)
             try {
                 if (faceHandler.isModelsLoaded) {
-                    const detection = await faceapi.detectSingleFace(videoRef.current, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.4 }))
+                    const detections = await faceapi.detectAllFaces(videoRef.current, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.4 }))
                         .withFaceLandmarks()
                         .withFaceExpressions();
 
-                    if (detection) {
-                        faceDetected = true;
+                    faceCount = detections.length;
+
+                    if (faceCount > 0) {
+                        // Assume the largest face box is the primary user
+                        mainFace = detections.reduce((prev, current) =>
+                            (prev.detection.box.area > current.detection.box.area) ? prev : current
+                        );
 
                         // 1. Gaze
-                        const landmarks = detection.landmarks.positions;
+                        const landmarks = mainFace.landmarks.positions;
                         const gaze = calculateGaze(landmarks);
                         detectedGaze = gaze.status;
                         setGazeStatus(gaze.status);
@@ -192,8 +199,8 @@ const EmployeeWorkspace = () => {
                             currentFocus = Math.max(0, currentFocus - 1);
                         }
 
-                        // 2. Expressions (Improved Sensitivity)
-                        const expressions = detection.expressions;
+                        // 2. Expressions
+                        const expressions = mainFace.expressions;
                         const sortedExpressions = Object.entries(expressions).sort((a, b) => b[1] - a[1]);
                         const primary = sortedExpressions[0];
                         const secondary = sortedExpressions[1];
@@ -221,11 +228,26 @@ const EmployeeWorkspace = () => {
                 // console.warn("COCO Error:", err);
             }
 
-            // C. LOGIC ENGINE
+            // C. LOGIC ENGINE & SECURITY THREATS
             const timeSinceLastAction = (Date.now() - lastActive) / 1000;
             const isIdle = timeSinceLastAction > 60;
 
-            if (isPhone) {
+            let threatLevel = null;
+
+            if (faceCount > 1) {
+                threatLevel = 'MULTIPLE_FACES';
+                currentStatus = 'Security Risk (Multiple Faces)';
+                currentFocus = Math.max(0, currentFocus - 10); // Heavy penalty
+                if (!toast.threatToastShown) {
+                    toast.error("SHOULDER SURFING DETECTED! Screen Locked.", { icon: '🚨', id: 'threat' });
+                    toast.threatToastShown = true;
+                    setTimeout(() => toast.threatToastShown = false, 5000);
+                }
+            } else if (faceCount === 0) {
+                threatLevel = 'AWAY';
+                currentStatus = 'Away';
+                currentFocus = Math.max(0, currentFocus - 2);
+            } else if (isPhone) {
                 currentStatus = 'Distracted (Phone)';
                 currentFocus = Math.max(0, currentFocus - 5);
                 if (!toast.phoneToastShown) {
@@ -236,23 +258,21 @@ const EmployeeWorkspace = () => {
             } else if (isIdle) {
                 currentStatus = 'Idle / Away';
                 currentFocus = Math.max(0, currentFocus - 2);
-            } else if (faceDetected) {
-                if (currentStatus === 'Initializing' || currentStatus === 'Away' || currentStatus === 'Idle / Away') {
+            } else {
+                if (currentStatus === 'Initializing' || currentStatus === 'Away' || currentStatus === 'Idle / Away' || currentStatus.includes('Risk')) {
                     currentStatus = 'Active';
                 }
                 if (currentStatus.includes('Distracted') && !isPhone && detectedGaze === 'Focused') {
                     currentStatus = 'Active';
                 }
                 if (currentFocus < 100) currentFocus += 0.5;
-            } else {
-                currentStatus = 'Away';
-                currentFocus = Math.max(0, currentFocus - 2);
             }
 
             // D. UPDATE LOCAL STATE
             if (currentStatus !== stateRef.current.status) setStatus(currentStatus);
             if (Math.floor(currentFocus) !== Math.floor(stateRef.current.focusScore)) setFocusScore(currentFocus);
             if (currentMood !== stateRef.current.mood) setMood(currentMood);
+            if (threatLevel !== securityThreat) setSecurityThreat(threatLevel);
 
             // Calculate Latency
             const loopLatency = Math.round(performance.now() - startTick);
@@ -267,13 +287,14 @@ const EmployeeWorkspace = () => {
                 phoneDetected: isPhone,
                 gaze: detectedGaze,
                 posture: currentPosture,
-                lastActive: lastActive
+                lastActive: lastActive,
+                securityThreat: threatLevel
             });
 
         }, 1000);
 
         return () => clearInterval(interval);
-    }, [currentUser]);
+    }, [currentUser, securityThreat]);
 
 
 
@@ -327,7 +348,7 @@ const EmployeeWorkspace = () => {
                 } else {
                     clearInterval(screenInterval);
                 }
-            }, 10000); // 10s for demo purposes
+            }, 2000); // 2s for near real-time live monitor feed
 
             // Stop sharing listener
             stream.getVideoTracks()[0].onended = () => {
@@ -385,7 +406,23 @@ const EmployeeWorkspace = () => {
                 <button onClick={handleClockOut} className="px-4 py-2 bg-rose-500 text-white rounded-lg hover:bg-rose-600 font-bold shadow-lg border border-rose-400 transition-all hover:scale-105">Clock Out</button>
             </div>
 
-            <div className="max-w-7xl w-full glass-card rounded-3xl shadow-2xl overflow-hidden flex flex-col md:flex-row h-[85vh] border border-white/60 relative z-10 font-sans">
+            <div className={`max-w-7xl w-full glass-card rounded-3xl shadow-2xl overflow-hidden flex flex-col md:flex-row h-[85vh] border border-white/60 relative z-10 font-sans transition-all duration-700 ${securityThreat ? 'ring-8 ring-rose-500/50' : ''}`}>
+
+                {/* SECURITY PROTOCOL OVERLAY */}
+                {securityThreat && (
+                    <div className="absolute inset-0 z-[100] backdrop-blur-[30px] bg-slate-900/40 flex flex-col items-center justify-center transition-all duration-500">
+                        <AlertTriangle className="w-24 h-24 text-rose-500 mb-6 drop-shadow-xl animate-bounce" />
+                        <h1 className="text-4xl md:text-5xl font-black text-white drop-shadow-lg uppercase tracking-widest text-center">
+                            {securityThreat === 'MULTIPLE_FACES' ? 'Privacy Breach' : 'Workspace Locked'}
+                        </h1>
+                        <p className="mt-4 text-xl md:text-2xl text-rose-200 font-medium text-center drop-shadow-md">
+                            {securityThreat === 'MULTIPLE_FACES'
+                                ? 'Shoulder Surfing Detected. Screen is hidden to protect sensitive data.'
+                                : 'You stepped away. Face scan required to unlock.'}
+                        </p>
+                    </div>
+                )}
+
                 {/* Left: Monitor */}
                 <div className="flex-[2] p-8 border-r border-slate-200/50 flex flex-col items-center justify-center relative bg-white/40">
 
