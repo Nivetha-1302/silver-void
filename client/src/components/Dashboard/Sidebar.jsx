@@ -16,7 +16,8 @@ import {
     Video,
     MapPin,
     DollarSign,
-    Trophy
+    Trophy,
+    Megaphone
 } from 'lucide-react';
 
 const Sidebar = ({ sidebarOpen, toggleSidebar }) => {
@@ -37,6 +38,7 @@ const Sidebar = ({ sidebarOpen, toggleSidebar }) => {
         { path: '/zones', label: 'Virtual Zones', icon: MapPin },
         { path: '/gallery', label: 'Screen Gallery', icon: Video },
         { path: '/security', label: 'Security Center', icon: Shield },
+        { path: '/announcements', label: 'Global Broadcasts', icon: Megaphone },
         { path: '/settings', label: 'Settings', icon: Settings },
     ];
 

@@ -31,6 +31,7 @@ const PayrollDashboard = lazy(() => import('./components/Finance/PayrollDashboar
 const InvoiceGenerator = lazy(() => import('./components/Finance/InvoiceGenerator'));
 const WorkTimeDashboard = lazy(() => import('./components/Dashboard/WorkTimeDashboard'));
 const Reports = lazy(() => import('./components/Dashboard/Reports'));
+const Announcements = lazy(() => import('./components/Dashboard/Announcements'));
 
 // Wrapper to apply layout only to Admin Routes
 const AppLayout = ({ children }) => {
@@ -72,6 +73,7 @@ const AnimatedRoutes = () => {
             <Route path="/security" element={<SecuritySystem />} />
             <Route path="/zones" element={<VirtualZoneDashboard />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/announcements" element={<Announcements />} />
             <Route path="/gallery" element={<ScreenGallery />} />
             <Route path="/support" element={<SupportCenter />} />
 

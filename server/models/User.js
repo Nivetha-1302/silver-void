@@ -8,6 +8,7 @@ const UserSchema = new mongoose.Schema({
     department: { type: String, default: 'Engineering' },
     employeeId: { type: String, unique: true, sparse: true },
     faceDescriptor: { type: Array }, // For face-api.js descriptors
+    profileImage: { type: String }, // Base64 profile image from registration
     skills: [{
         name: String,
         level: Number, // XP or Percentage

@@ -39,16 +39,65 @@ const EmployeeWorkspace = () => {
     ]);
     const COLORS = ['#9ca3af', '#22c55e', '#ef4444'];
 
+    const [tasks, setTasks] = useState([]);
+    const [xp, setXp] = useState(0);
+    const [pomodoro, setPomodoro] = useState(1500); // 25 mins
+    const [isTimerRunning, setIsTimerRunning] = useState(false);
+    const [announcements, setAnnouncements] = useState([]);
+
+    // Pomodoro Logic
+    useEffect(() => {
+        let interval;
+        if (isTimerRunning && pomodoro > 0) {
+            interval = setInterval(() => setPomodoro(p => p - 1), 1000);
+        } else if (pomodoro === 0) {
+            toast.success("Focus Session Complete! Take a break.", { icon: '☕' });
+            setIsTimerRunning(false);
+        }
+        return () => clearInterval(interval);
+    }, [isTimerRunning, pomodoro]);
+
+    const formatTime = (s) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
+    const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light');
+    const [isProfileOpen, setIsProfileOpen] = useState(false);
+    const [editForm, setEditForm] = useState({ fullName: '', email: '', password: '' });
+
     const navigate = useNavigate();
 
     // 1. Initial Setup
     useEffect(() => {
-        const user = localStorage.getItem('currentUser');
-        if (!user) {
+        const userStr = localStorage.getItem('currentUser');
+        if (!userStr) {
             navigate('/login');
             return;
         }
-        setCurrentUser(JSON.parse(user));
+        const user = JSON.parse(userStr);
+        setCurrentUser(user);
+        setEditForm({ fullName: user.fullName, email: user.email, password: '' });
+
+        // Sync theme
+        if (theme === 'dark') document.documentElement.classList.add('dark');
+        else document.documentElement.classList.remove('dark');
+
+        // Fetch tasks
+        const fetchTasks = async () => {
+            try {
+                const res = await axios.get('/api/tasks');
+                const myTasks = res.data.filter(t => t.assignee && (t.assignee._id === user._id || t.assignee === user._id));
+                setTasks(myTasks);
+                setXp(myTasks.filter(t => t.status === 'Completed').length * 250 + 1200);
+            } catch (err) { console.error(err); }
+        };
+
+        const fetchAnnouncements = async () => {
+            try {
+                const res = await axios.get('/api/announcements');
+                setAnnouncements(res.data);
+            } catch (err) { console.error(err); }
+        };
+
+        fetchTasks();
+        fetchAnnouncements();
 
         const setupAI = async () => {
             try {
@@ -84,12 +133,15 @@ const EmployeeWorkspace = () => {
             if (document.hidden && currentUser) {
                 setFocusScore(prev => Math.max(0, prev - 5)); // Penalty for switching tabs
                 toast.error("SCREEN SWITCH DETECTED! (-5% Focus)", { icon: '⚠️' });
+
+                const screenshot = getSnapshot();
                 try {
                     await axios.post('/api/monitoring/log-event', {
                         userId: currentUser._id,
                         type: 'SCREEN_SWITCH',
                         details: 'User switched tabs or minimized window',
-                        severity: 'MEDIUM'
+                        severity: 'MEDIUM',
+                        image: screenshot
                     });
                 } catch (err) { console.error(err); }
             }
@@ -98,6 +150,18 @@ const EmployeeWorkspace = () => {
         document.addEventListener("visibilitychange", handleVisibilityChange);
         return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
     }, [currentUser]);
+
+    const getSnapshot = () => {
+        if (!videoRef.current) return null;
+        const canvas = document.createElement('canvas');
+        canvas.width = videoRef.current.videoWidth || 640;
+        canvas.height = videoRef.current.videoHeight || 480;
+        const ctx = canvas.getContext('2d');
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(videoRef.current, 0, 0);
+        return canvas.toDataURL('image/jpeg', 0.6);
+    };
 
     // 1.6 Data Collection Interval (Charts)
     useEffect(() => {
@@ -242,6 +306,15 @@ const EmployeeWorkspace = () => {
                     toast.error("SHOULDER SURFING DETECTED! Screen Locked.", { icon: '🚨', id: 'threat' });
                     toast.threatToastShown = true;
                     setTimeout(() => toast.threatToastShown = false, 5000);
+
+                    // Log to server with screenshot
+                    axios.post('/api/monitoring/log-event', {
+                        userId: currentUser._id,
+                        type: 'UNAUTHORIZED_PERSON',
+                        details: 'Multiple faces detected in workspace',
+                        severity: 'CRITICAL',
+                        image: getSnapshot()
+                    }).catch(console.error);
                 }
             } else if (faceCount === 0) {
                 threatLevel = 'AWAY';
@@ -254,6 +327,15 @@ const EmployeeWorkspace = () => {
                     toast.error("PHONE DETECTED!", { id: 'phone-alert', duration: 2000 });
                     toast.phoneToastShown = true;
                     setTimeout(() => toast.phoneToastShown = false, 5000);
+
+                    // Log to server with screenshot
+                    axios.post('/api/monitoring/log-event', {
+                        userId: currentUser._id,
+                        type: 'PHONE_DETECTED',
+                        details: 'Employee using mobile phone during work',
+                        severity: 'HIGH',
+                        image: getSnapshot()
+                    }).catch(console.error);
                 }
             } else if (isIdle) {
                 currentStatus = 'Idle / Away';
@@ -299,21 +381,16 @@ const EmployeeWorkspace = () => {
 
 
     // Action Handlers
-    const handleClockIn = async () => {
+    const handleLogout = async () => {
         try {
-            await axios.post('/api/attendance/clock-in', { userId: currentUser._id });
-            toast.success("Clocked In Successfully");
+            await axios.post('/api/auth/logout', { userId: currentUser._id });
+            localStorage.clear();
+            navigate('/login');
+            toast.success("Successfully logged out and attendance recorded.");
         } catch (err) {
-            toast.error("Clock In Failed");
-        }
-    };
-
-    const handleClockOut = async () => {
-        try {
-            await axios.post('/api/attendance/clock-out', { userId: currentUser._id });
-            toast.success("Clocked Out");
-        } catch (err) {
-            toast.error("Clock Out Failed");
+            console.error(err);
+            localStorage.clear();
+            navigate('/login');
         }
     };
 
@@ -394,174 +471,423 @@ const EmployeeWorkspace = () => {
         }
     };
 
+    const toggleTheme = () => {
+        const newTheme = theme === 'light' ? 'dark' : 'light';
+        setTheme(newTheme);
+        localStorage.setItem('theme', newTheme);
+        if (newTheme === 'dark') document.documentElement.classList.add('dark');
+        else document.documentElement.classList.remove('dark');
+        toast.success(`Theme switched to ${newTheme} mode`);
+    };
+
+    const handleProfileUpdate = async (e) => {
+        e.preventDefault();
+        try {
+            const res = await axios.post('/api/auth/update-profile', {
+                userId: currentUser.id || currentUser._id,
+                ...editForm
+            });
+            setCurrentUser(res.data.user);
+            localStorage.setItem('currentUser', JSON.stringify(res.data.user));
+            setIsProfileOpen(false);
+            toast.success("Profile Updated Successfully!");
+        } catch (err) {
+            toast.error(err.response?.data?.message || "Update failed");
+        }
+    };
+
     if (!currentUser) return <div>Loading...</div>;
 
     return (
-        <div className="h-screen bg-transparent flex flex-col items-center justify-center p-8 relative overflow-hidden">
-            <AnimatedBackground intensity="high" />
+        <div className={`h-screen flex flex-col items-center justify-center p-4 md:p-8 relative overflow-hidden transition-colors duration-500 ${theme === 'dark' ? 'bg-slate-950 text-white' : 'bg-slate-50 text-slate-800'}`}>
+            <AnimatedBackground intensity={theme === 'dark' ? 'low' : 'high'} />
 
-            <div className="absolute top-4 right-4 flex gap-2 z-50">
-                <button onClick={startScreenShare} className="px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 font-bold shadow-lg border border-indigo-400 transition-all hover:scale-105">Share Screen</button>
-                <button onClick={handleClockIn} className="px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 font-bold shadow-lg border border-emerald-400 transition-all hover:scale-105">Clock In</button>
-                <button onClick={handleClockOut} className="px-4 py-2 bg-rose-500 text-white rounded-lg hover:bg-rose-600 font-bold shadow-lg border border-rose-400 transition-all hover:scale-105">Clock Out</button>
+            {/* THEME TOGGLE & PROFILE TRIGGER */}
+            <div className="fixed top-8 left-8 z-50 flex gap-3">
+                <button
+                    onClick={toggleTheme}
+                    className="p-3 bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 shadow-xl hover:scale-110 transition-all text-indigo-500"
+                >
+                    {theme === 'light' ? '🌙' : '☀️'}
+                </button>
+                <button
+                    onClick={() => setIsProfileOpen(true)}
+                    className="p-3 bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 shadow-xl hover:scale-110 transition-all"
+                >
+                    <User className="w-5 h-5 text-indigo-500" />
+                </button>
             </div>
 
-            <div className={`max-w-7xl w-full glass-card rounded-3xl shadow-2xl overflow-hidden flex flex-col md:flex-row h-[85vh] border border-white/60 relative z-10 font-sans transition-all duration-700 ${securityThreat ? 'ring-8 ring-rose-500/50' : ''}`}>
-
-                {/* SECURITY PROTOCOL OVERLAY */}
-                {securityThreat && (
-                    <div className="absolute inset-0 z-[100] backdrop-blur-[30px] bg-slate-900/40 flex flex-col items-center justify-center transition-all duration-500">
-                        <AlertTriangle className="w-24 h-24 text-rose-500 mb-6 drop-shadow-xl animate-bounce" />
-                        <h1 className="text-4xl md:text-5xl font-black text-white drop-shadow-lg uppercase tracking-widest text-center">
-                            {securityThreat === 'MULTIPLE_FACES' ? 'Privacy Breach' : 'Workspace Locked'}
-                        </h1>
-                        <p className="mt-4 text-xl md:text-2xl text-rose-200 font-medium text-center drop-shadow-md">
-                            {securityThreat === 'MULTIPLE_FACES'
-                                ? 'Shoulder Surfing Detected. Screen is hidden to protect sensitive data.'
-                                : 'You stepped away. Face scan required to unlock.'}
-                        </p>
-                    </div>
-                )}
-
-                {/* Left: Monitor */}
-                <div className="flex-[2] p-8 border-r border-slate-200/50 flex flex-col items-center justify-center relative bg-white/40">
-
-                    <h2 className="absolute top-6 left-6 text-xl font-bold text-slate-800 flex items-center gap-2">
-                        <Activity className="w-5 h-5 text-indigo-500 animate-pulse" />
-                        <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 to-cyan-500">Workstation Monitor</span>
-                    </h2>
-
-                    {/* Video Feed Wrapper */}
-                    <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden shadow-2xl border border-indigo-200 group">
-                        {/* HUD Corners */}
-                        <div className="absolute top-2 left-2 w-8 h-8 border-t-2 border-l-2 border-indigo-400/50 rounded-tl-lg"></div>
-                        <div className="absolute top-2 right-2 w-8 h-8 border-t-2 border-r-2 border-indigo-400/50 rounded-tr-lg"></div>
-                        <div className="absolute bottom-2 left-2 w-8 h-8 border-b-2 border-l-2 border-indigo-400/50 rounded-bl-lg"></div>
-                        <div className="absolute bottom-2 right-2 w-8 h-8 border-b-2 border-r-2 border-indigo-400/50 rounded-br-lg"></div>
-
-                        {/* Scan Line Animation */}
-                        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-indigo-500/10 to-transparent h-full w-full animate-scan pointer-events-none z-10"></div>
-
-                        <video ref={videoRef} autoPlay muted className="w-full h-full object-cover transform scale-x-[-1]" />
-
-                        {/* Overlays */}
-                        <div className="absolute top-4 right-4 flex items-center gap-2 px-3 py-1 bg-red-600/90 rounded-full text-white text-xs font-bold animate-pulse z-20 shadow-red-500/50 shadow-lg">
-                            REC ●
+            {/* PROFILE SIDEBAR MODAL */}
+            <AnimatePresence>
+                {isProfileOpen && (
+                    <motion.div
+                        initial={{ x: '100%' }}
+                        animate={{ x: 0 }}
+                        exit={{ x: '100%' }}
+                        className="fixed right-0 top-0 h-full w-full max-w-sm bg-white/80 dark:bg-slate-900/90 backdrop-blur-2xl z-[100] shadow-[-20px_0_50px_rgba(0,0,0,0.2)] border-l border-white/20 p-8 flex flex-col"
+                    >
+                        <div className="flex justify-between items-center mb-8">
+                            <h2 className="text-2xl font-black italic">PILOT PROFILE</h2>
+                            <button onClick={() => setIsProfileOpen(false)} className="text-slate-400 hover:text-rose-500">✕</button>
                         </div>
 
-                        {phoneDetected && (
-                            <div className="absolute inset-0 flex items-center justify-center bg-red-500/20 backdrop-blur-sm z-30 border-4 border-red-500 animate-pulse">
-                                <div className="bg-black/80 text-white px-6 py-4 rounded-xl flex flex-col items-center border border-red-500 shadow-2xl">
-                                    <Smartphone className="w-12 h-12 mb-2 text-red-500" />
-                                    <span className="text-2xl font-black uppercase tracking-widest text-red-500">PHONE DETECTED</span>
-                                    <span className="text-sm text-gray-300">Violating Security Protocol</span>
+                        <div className="flex flex-col items-center gap-4 mb-8">
+                            <div className="w-32 h-32 rounded-[2rem] overflow-hidden border-4 border-indigo-500 shadow-2xl relative group">
+                                {currentUser.profileImage ? (
+                                    <img src={currentUser.profileImage} className="w-full h-full object-cover" />
+                                ) : (
+                                    <img src={`https://ui-avatars.com/api/?name=${currentUser.fullName}&background=6366f1&color=fff`} className="w-full h-full object-cover" />
+                                )}
+                                <div className="absolute inset-0 bg-indigo-600/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <Camera className="w-8 h-8 text-white" />
                                 </div>
                             </div>
-                        )}
+                            <div className="text-center">
+                                <h3 className="text-xl font-bold">{currentUser.fullName}</h3>
+                                <p className="text-xs font-black text-indigo-500 uppercase tracking-widest">{currentUser.department}</p>
+                            </div>
+                        </div>
 
-                        {/* Advanced AI Overlays */}
-                        <PostureCoach videoRef={videoRef} onPostureUpdate={setPostureStatus} />
+                        <form onSubmit={handleProfileUpdate} className="space-y-4">
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-slate-400 uppercase">Identity Name</label>
+                                <input
+                                    type="text"
+                                    value={editForm.fullName}
+                                    onChange={(e) => setEditForm({ ...editForm, fullName: e.target.value })}
+                                    className="w-full bg-slate-100 dark:bg-white/5 border-none p-3 rounded-xl focus:ring-2 ring-indigo-500 outline-none"
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-slate-400 uppercase">Comm Channel (Email)</label>
+                                <input
+                                    type="email"
+                                    value={editForm.email}
+                                    onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                                    className="w-full bg-slate-100 dark:bg-white/5 border-none p-3 rounded-xl focus:ring-2 ring-indigo-500 outline-none"
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-slate-400 uppercase">New Security Code</label>
+                                <input
+                                    type="password"
+                                    placeholder="Keep empty to leave as is"
+                                    value={editForm.password}
+                                    onChange={(e) => setEditForm({ ...editForm, password: e.target.value })}
+                                    className="w-full bg-slate-100 dark:bg-white/5 border-none p-3 rounded-xl focus:ring-2 ring-indigo-500 outline-none"
+                                />
+                            </div>
+                            <button type="submit" className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-lg shadow-indigo-500/30 hover:bg-indigo-700 transition-all mt-4">
+                                UPDATE BIOMETRIC DATA
+                            </button>
+                        </form>
+
+                        <button onClick={handleLogout} className="mt-auto w-full py-4 text-rose-500 font-bold text-xs uppercase tracking-widest border border-rose-500/20 rounded-2xl hover:bg-rose-500 hover:text-white transition-all">
+                            TERMINATE SESSION
+                        </button>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            <div className="max-w-[1600px] w-full h-[90vh] grid grid-cols-1 lg:grid-cols-12 gap-6 relative z-10">
+
+                {/* COLUMN 1: MISSION HUB (Tasks) */}
+                <div className="lg:col-span-3 h-full flex flex-col gap-6">
+                    <div className="glass-card bg-white/60 backdrop-blur-xl rounded-[2rem] border border-white/60 p-6 shadow-xl flex-1 flex flex-col overflow-hidden">
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="p-2 bg-indigo-500 rounded-lg text-white shadow-lg shadow-indigo-200">
+                                <Activity className="w-5 h-5" />
+                            </div>
+                            <h2 className="text-xl font-black bg-clip-text text-transparent bg-gradient-to-r from-slate-800 to-slate-500">Mission Hub</h2>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar">
+                            {tasks.length > 0 ? tasks.map(task => (
+                                <div key={task._id} className="p-4 rounded-2xl bg-white/50 border border-white hover:border-indigo-300 transition-all group cursor-pointer shadow-sm hover:translate-x-1">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest ${task.priority === 'High' ? 'bg-rose-100 text-rose-600' :
+                                            task.priority === 'Medium' ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'
+                                            }`}>
+                                            {task.priority}
+                                        </span>
+                                        <span className="text-[10px] font-bold text-slate-400">{task.status}</span>
+                                    </div>
+                                    <h4 className="font-bold text-slate-800 text-sm leading-tight mb-1">{task.title}</h4>
+                                    {task.aiSentiment && (
+                                        <div className="flex items-center gap-1 mt-2">
+                                            <div className={`w-1.5 h-1.5 rounded-full ${task.aiSentiment.label === 'Positive' ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
+                                            <span className="text-[9px] font-bold uppercase text-slate-500">AI Stress: {task.aiSentiment.label}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            )) : (
+                                <div className="text-center py-12 opacity-50">
+                                    <p className="text-sm font-bold">No Missions Assigned</p>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Team Activity Enhancement */}
+                        <div className="pt-4 mt-auto border-t border-slate-200 dark:border-white/10">
+                            <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Team Radar</h3>
+                            <div className="space-y-3">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center text-[10px] font-bold">JD</div>
+                                    <div className="flex-1">
+                                        <p className="text-[10px] font-bold">Jane Doe <span className="text-emerald-500 ml-2">● Online</span></p>
+                                        <p className="text-[9px] text-slate-400">Fixed focus spike</p>
+                                    </div>
+                                    <div className="flex gap-1">
+                                        <button onClick={() => toast('Sent 🔥 to Jane')} className="text-xs hover:scale-125 transition-transform">🔥</button>
+                                        <button onClick={() => toast('Sent ❤️ to Jane')} className="text-xs hover:scale-125 transition-transform">❤️</button>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-3 opacity-60">
+                                    <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-[10px] font-bold">MK</div>
+                                    <div className="flex-1">
+                                        <p className="text-[10px] font-bold">Mike Ross <span className="text-slate-400 ml-2">● Away</span></p>
+                                        <p className="text-[9px] text-slate-400">Lunch break</p>
+                                    </div>
+                                    <div className="flex gap-1">
+                                        <button onClick={() => toast('Sent ☕ to Mike')} className="text-xs hover:scale-125 transition-transform">☕</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
-                    <div className="mt-4 flex gap-4 text-xs font-mono text-slate-500">
-                        <span>LATENCY: <span className={latency > 100 ? 'text-amber-500' : 'text-emerald-500'}>{latency}ms</span></span>
-                        <span>|</span>
-                        <span>AI MODEL: MULTI-MODAL (Face+Pose)</span>
-                        <span>|</span>
-                        <span className={postureStatus === 'Good' ? 'text-emerald-600' : 'text-rose-600'}>
-                            POSTURE: {postureStatus ? postureStatus.toUpperCase() : 'INIT'}
-                        </span>
-                        <span>|</span>
-                        <span className={gazeStatus === 'Focused' ? 'text-emerald-600' : 'text-amber-600'}>
-                            GAZE: {gazeStatus ? gazeStatus.toUpperCase() : 'INIT'}
-                        </span>
+                    {/* Security Events Mini Feed */}
+                    <div className="glass-card bg-slate-900/90 backdrop-blur-xl rounded-[2rem] border border-white/10 p-6 shadow-2xl h-[200px] flex flex-col">
+                        <h3 className="text-xs font-black uppercase tracking-[0.2em] text-indigo-400 mb-4 flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+                            Security Pulse
+                        </h3>
+                        <div className="text-[10px] font-mono text-slate-300 space-y-2">
+                            <div className="flex gap-2">
+                                <span className="text-slate-500">[{new Date().toLocaleTimeString()}]</span>
+                                <span className="text-emerald-400">SESSION_VERIFIED</span>
+                            </div>
+                            <div className="flex gap-2">
+                                <span className="text-slate-500">[{new Date().toLocaleTimeString()}]</span>
+                                <span className="text-amber-400">TELEMETRY_SYNCED</span>
+                            </div>
+                            {latency > 150 && (
+                                <div className="flex gap-2">
+                                    <span className="text-slate-500">[{new Date().toLocaleTimeString()}]</span>
+                                    <span className="text-rose-400">LATENCY_SPIKE_DETECTED</span>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
 
-                {/* Right: Stats Panel */}
-                <div className="flex-1 p-8 bg-white/60 backdrop-blur-md flex flex-col gap-6 overflow-y-auto border-l border-slate-200/50">
-                    {/* User Profile */}
-                    <div className="flex items-center gap-4 p-4 bg-white/40 rounded-xl shadow-sm border border-white/50 hover:bg-white/60 transition-colors">
-                        <img src={`https://ui-avatars.com/api/?name=${currentUser.fullName}&background=6366f1&color=fff`} className="w-12 h-12 rounded-full border-2 border-indigo-200" />
+                {/* COLUMN 2: COMMAND CENTER (Monitor) */}
+                <div className="lg:col-span-6 h-full flex flex-col gap-6">
+                    <div className="flex-1 glass-card bg-slate-900 rounded-[3rem] border border-white/20 shadow-2xl relative overflow-hidden flex flex-col group p-2">
+
+                        {/* THE PILOT DASHBOARD */}
+                        <div className="flex-1 relative rounded-[2.5rem] overflow-hidden bg-black">
+                            {/* HUD Overlays */}
+                            <div className="absolute top-8 left-8 z-20 flex flex-col gap-1">
+                                <div className="flex items-center gap-2">
+                                    <div className="px-2 py-0.5 bg-rose-600 text-[10px] font-black text-white rounded skew-x-[-15deg] shadow-lg shadow-rose-500/30">LIVE</div>
+                                    <span className="text-white/50 text-xs font-mono tracking-widest">{currentUser.fullName ? currentUser.fullName.toUpperCase() : 'USER'}</span>
+                                </div>
+                                <div className="text-[10px] text-white/30 font-mono">0.05.29.11 // ALPHA_UNIT</div>
+
+                                {/* POMODORO TIMER HUD */}
+                                <div className="mt-4 p-3 bg-white/5 backdrop-blur-md rounded-2xl border border-white/10 flex items-center gap-4">
+                                    <div className="flex flex-col">
+                                        <span className="text-[8px] font-black text-indigo-400 uppercase">Focus Timer</span>
+                                        <span className="text-xl font-mono text-white font-bold">{formatTime(pomodoro)}</span>
+                                    </div>
+                                    <button
+                                        onClick={() => setIsTimerRunning(!isTimerRunning)}
+                                        className={`w-8 h-8 rounded-lg flex items-center justify-center text-white transition-all ${isTimerRunning ? 'bg-rose-500 shadow-rose-500/30' : 'bg-indigo-500 shadow-indigo-500/30'}`}
+                                    >
+                                        {isTimerRunning ? '⏸' : '▶'}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="absolute top-8 right-8 z-20 text-white/50 font-mono text-[10px] text-right">
+                                CAM_SOURCE: 0x82<br />
+                                FOV: 90.0°<br />
+                                <span className={latency > 100 ? 'text-amber-500' : 'text-emerald-500'}>FPS: {latency > 0 ? Math.round(1000 / latency) : 30}</span>
+                            </div>
+
+                            {/* Center Target */}
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
+                                <div className="w-48 h-48 border-2 border-white/20 rounded-full flex items-center justify-center rotate-45">
+                                    <div className="w-full h-0.5 bg-white/20"></div>
+                                    <div className="h-full w-0.5 bg-white/20 absolute"></div>
+                                </div>
+                                <div className="absolute w-64 h-64 border border-white/10 rounded-full animate-spin-slow"></div>
+                            </div>
+
+                            <video ref={videoRef} autoPlay muted className="w-full h-full object-cover transform scale-x-[-1] opacity-60" />
+
+                            {/* Threat Overlay */}
+                            {securityThreat && (
+                                <div className="absolute inset-0 z-[100] bg-rose-600/20 backdrop-blur-2xl flex flex-col items-center justify-center text-center p-12 transition-all duration-700 animate-pulse">
+                                    <AlertTriangle className="w-32 h-32 text-white mb-6 animate-bounce" />
+                                    <h1 className="text-6xl font-black text-white uppercase tracking-tighter mb-4 italic">SECURITY BREACH</h1>
+                                    <p className="text-2xl text-rose-100 font-bold max-w-lg">
+                                        {securityThreat === 'MULTIPLE_FACES' ? 'Multiple Identities Detected. Privacy Mode Engaged.' : 'Workspace Inactive. Identity Auth Required.'}
+                                    </p>
+                                </div>
+                            )}
+
+                            {phoneDetected && (
+                                <div className="absolute inset-0 z-[90] border-[16px] border-rose-500/50 flex items-center justify-center pointer-events-none animate-pulse">
+                                    <div className="bg-rose-600 text-white p-6 rounded-full rotate-[-15deg] shadow-2xl translate-y-[-100px] pointer-events-auto">
+                                        <Smartphone className="w-16 h-16" />
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Posture Overlay Component */}
+                            <PostureCoach videoRef={videoRef} onPostureUpdate={setPostureStatus} />
+                        </div>
+
+                        {/* Lower Command Row */}
+                        <div className="p-6 flex items-center justify-between border-t border-white/10">
+                            <div className="flex items-center gap-6">
+                                <div className="flex flex-col">
+                                    <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">Posture</span>
+                                    <div className="flex items-center gap-2">
+                                        <div className={`w-2 h-2 rounded-full ${postureStatus === 'Good' ? 'bg-emerald-500 shadow-emerald-500/50' : 'bg-rose-500 shadow-rose-500/50'} shadow-lg`}></div>
+                                        <span className="text-sm font-bold text-white uppercase tracking-tighter">{postureStatus || 'CALIBRATING'}</span>
+                                    </div>
+                                </div>
+                                <div className="w-px h-8 bg-white/10"></div>
+                                <div className="flex flex-col">
+                                    <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">Gaze Tech</span>
+                                    <div className="flex items-center gap-2">
+                                        <Eye className="w-4 h-4 text-white/60" />
+                                        <span className="text-sm font-bold text-white uppercase tracking-tighter">{gazeStatus || 'SYNCING'}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex gap-4">
+                                <button onClick={startScreenShare} className="px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all border border-white/10 hover:border-white/30 backdrop-blur-sm">
+                                    Share Screen
+                                </button>
+                                <button onClick={handleLogout} className="px-6 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-rose-900/20 active:scale-95">
+                                    Logout
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* COLUMN 3: BIOMETRIC ANALYTICS (Stats) */}
+                <div className="lg:col-span-3 h-full flex flex-col gap-6">
+                    {/* Level/Gamification Card */}
+                    <div className="glass-card bg-indigo-600 rounded-[2.5rem] p-6 shadow-2xl relative overflow-hidden group border border-indigo-400">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-400/20 rounded-full blur-3xl -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-700"></div>
+                        <div className="relative z-10">
+                            <div className="flex justify-between items-center mb-6">
+                                <div className="p-3 bg-white/20 rounded-2xl backdrop-blur-md">
+                                    <Smile className="w-6 h-6 text-white" />
+                                </div>
+                                <span className="text-white/80 font-black text-xs tracking-widest">RANK: GOLD II</span>
+                            </div>
+                            <h3 className="text-white text-3xl font-black mb-1">{xp.toLocaleString()} <span className="text-sm font-bold text-indigo-200">XP</span></h3>
+                            <div className="w-full bg-white/10 h-2 rounded-full mt-2 overflow-hidden border border-white/5">
+                                <div className="bg-white h-full transition-all duration-1000" style={{ width: '75%' }}></div>
+                            </div>
+                            <p className="text-indigo-100 text-[10px] font-bold mt-2 uppercase tracking-wide">3.2k to next level</p>
+                        </div>
+                    </div>
+
+                    {/* Stats Wing */}
+                    <div className="glass-card bg-white/60 backdrop-blur-xl rounded-[2.5rem] border border-white/60 p-6 shadow-xl flex-1 flex flex-col gap-6">
                         <div>
-                            <h3 className="font-bold text-slate-800">{currentUser.fullName}</h3>
-                            <p className="text-xs text-indigo-500 font-bold uppercase tracking-widest">{currentUser.role || 'Employee'}</p>
-                        </div>
-                    </div>
-
-                    {/* Status Cards */}
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className={`p-4 rounded-xl border backdrop-blur-sm ${status.includes('Distracted') ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'} transition-colors duration-500`}>
-                            <p className="text-[10px] opacity-70 mb-1 font-bold uppercase">Current Status</p>
-                            <p className="font-bold truncate">{status}</p>
-                        </div>
-                        <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-xl backdrop-blur-sm relative overflow-hidden">
-                            <div className="absolute top-0 right-0 w-16 h-16 bg-indigo-200/50 rounded-full blur-xl -mr-4 -mt-4"></div>
-                            <p className="text-[10px] text-indigo-600 mb-1 font-bold uppercase">Focus Score</p>
-                            <p className="text-3xl font-black text-indigo-600">{Math.round(focusScore)}<span className="text-sm align-top">%</span></p>
-                        </div>
-                    </div>
-
-                    {/* Charts Section */}
-                    <div className="grid grid-cols-1 gap-4">
-                        {/* Focus Trend */}
-                        <div className="bg-white/50 p-4 rounded-xl border border-white/60 shadow-sm backdrop-blur-sm">
-                            <h4 className="text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider flex justify-between">
-                                <span>Real-Time Focus Trend</span>
-                                <span className="text-indigo-600">{Math.round(focusScore)}%</span>
-                            </h4>
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="text-sm font-black uppercase text-slate-500 tracking-widest">Focus Level</h3>
+                                <span className="text-2xl font-black text-indigo-600">{Math.round(focusScore)}%</span>
+                            </div>
                             <div className="h-32 w-full">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <LineChart data={focusHistory}>
-                                        <XAxis dataKey="time" hide />
-                                        <YAxis domain={[0, 100]} hide />
-                                        <Tooltip contentStyle={{ fontSize: '12px', borderRadius: '8px', backgroundColor: '#fff', border: '1px solid #e2e8f0', color: '#1e293b' }} />
                                         <Line type="monotone" dataKey="score" stroke="#6366f1" strokeWidth={3} dot={false} animationDuration={500} />
                                     </LineChart>
                                 </ResponsiveContainer>
                             </div>
                         </div>
 
-                        {/* Emotion Distribution */}
-                        <div className="bg-white/50 p-4 rounded-xl border border-white/60 shadow-sm backdrop-blur-sm flex items-center justify-between">
+                        <div className="p-4 bg-slate-50 rounded-3xl border border-slate-100 flex items-center justify-between">
+                            <div className="flex flex-col">
+                                <span className="text-[10px] font-black text-slate-400 uppercase">Current Mood</span>
+                                <span className="text-lg font-black text-slate-800 tracking-tighter">{mood}</span>
+                            </div>
+                            <div className="h-12 w-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-2xl">
+                                {mood === 'Happy' ? '😊' : mood === 'Sad' ? '😔' : mood === 'Surprised' ? '😮' : '😐'}
+                            </div>
+                        </div>
+
+                        <div className="mt-auto space-y-4">
+                            {/* Focus Heatmap Enhancement */}
                             <div>
-                                <h4 className="text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">Emotion Analysis</h4>
-                                <p className="text-2xl font-bold text-slate-800">{mood}</p>
-                                <p className="text-[10px] text-slate-500">SESSION AGGREGATE</p>
+                                <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">Intensity Heatmap (Last 12hr)</h4>
+                                <div className="flex gap-1 px-1">
+                                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(i => (
+                                        <div key={i} className={`flex-1 h-3 rounded-sm ${i % 3 === 0 ? 'bg-indigo-500' :
+                                            i % 5 === 0 ? 'bg-indigo-200' : 'bg-indigo-400'
+                                            } transition-all hover:scale-125 cursor-help border border-white/10`} title={`Hour ${i}: High Intensity`}></div>
+                                    ))}
+                                </div>
                             </div>
-                            <div className="h-20 w-20">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <PieChart>
-                                        <Pie data={emotionData} cx="50%" cy="50%" innerRadius={15} outerRadius={30} paddingAngle={2} dataKey="value">
-                                            {emotionData.map((entry, index) => (
-                                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="none" />
-                                            ))}
-                                        </Pie>
-                                    </PieChart>
-                                </ResponsiveContainer>
+
+                            <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
+                                <span>Core Productivity</span>
+                                <span className="text-indigo-500">EXCEPTIONAL</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                                <div className="bg-white/50 p-3 rounded-2xl border border-white">
+                                    <span className="text-[9px] font-bold text-slate-400 uppercase">Latency</span>
+                                    <p className="text-sm font-black text-slate-800 font-mono">{latency}ms</p>
+                                </div>
+                                <div className="bg-white/50 p-3 rounded-2xl border border-white">
+                                    <span className="text-[9px] font-bold text-slate-400 uppercase">Input</span>
+                                    <p className="text-sm font-black text-slate-800 font-mono">{clickCount}</p>
+                                </div>
                             </div>
                         </div>
                     </div>
-
-                    {/* Session Info */}
-                    <div className="grid grid-cols-2 gap-4 text-xs text-slate-500 bg-white/40 p-3 rounded-lg border border-white/50">
-                        <div className="flex flex-col">
-                            <span className="font-bold uppercase tracking-wider mb-1">Interactions</span>
-                            <span className="font-mono text-slate-700">{clickCount} events</span>
-                        </div>
-                        <div className="flex flex-col text-right">
-                            <span className="font-bold uppercase tracking-wider mb-1">Last Active</span>
-                            <span className="font-mono text-slate-700">{new Date(lastActivityTime).toLocaleTimeString()}</span>
-                        </div>
-                    </div>
-
-                    <button onClick={() => { localStorage.clear(); navigate('/login'); }} className="w-full py-3 text-red-600 text-sm font-bold border border-red-200 hover:bg-red-50 rounded-lg transition-all hover:shadow-md mt-auto">
-                        TERMINATE SESSION
-                    </button>
                 </div>
             </div>
-            <HealthMonitor isActive={status !== 'Idle' && status !== 'Away'} focusScore={focusScore} />
+
+            <HealthMonitor isActive={status !== 'Away'} focusScore={focusScore} />
             <VoiceControl onCommand={handleVoiceCommand} />
+
+            {/* PUBLIC BROADCAST TICKER */}
+            <div className="fixed bottom-0 left-0 w-full bg-slate-900/80 backdrop-blur-md border-t border-white/10 py-1.5 z-[100] overflow-hidden">
+                <div className="flex whitespace-nowrap animate-marquee">
+                    <span className="text-[10px] font-black text-indigo-400 uppercase px-8">📢 SYSTEM BROADCAST:</span>
+                    {announcements.length > 0 ? announcements.map((a, i) => (
+                        <span key={i} className={`text-[10px] font-bold uppercase px-4 italic ${a.type === 'congrats' ? 'text-emerald-400' :
+                                a.type === 'urgent' ? 'text-rose-400' : 'text-white'
+                            }`}>
+                            {a.message}...
+                        </span>
+                    )) : (
+                        <span className="text-[10px] font-bold text-white uppercase px-4 italic">Scanning for active airwaves... no current broadcasts...</span>
+                    )}
+                    {/* Duplicate for seamless effect */}
+                    <span className="text-[10px] font-black text-indigo-400 uppercase px-8">📢 SYSTEM BROADCAST:</span>
+                    {announcements.map((a, i) => (
+                        <span key={`dup-${i}`} className={`text-[10px] font-bold uppercase px-4 italic ${a.type === 'congrats' ? 'text-emerald-400' :
+                                a.type === 'urgent' ? 'text-rose-400' : 'text-white'
+                            }`}>
+                            {a.message}...
+                        </span>
+                    ))}
+                </div>
+            </div>
         </div>
     );
 };

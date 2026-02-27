@@ -3,6 +3,7 @@ const router = express.Router();
 const Screenshot = require('../models/Screenshot');
 const SecurityLog = require('../models/SecurityLog');
 const User = require('../models/User');
+const { sendAlertEmail } = require('../utils/emailService');
 
 // === NEW ===
 // Upload Screenshot (Base64)
@@ -49,7 +50,7 @@ router.get('/gallery', async (req, res) => {
 // === SECURITY EVENT LOGGING (Audit Trail) ===
 router.post('/log-event', async (req, res) => {
     try {
-        const { userId, type, details, severity } = req.body;
+        const { userId, type, details, severity, image } = req.body;
 
         const newLog = new SecurityLog({
             userId,
@@ -58,6 +59,15 @@ router.post('/log-event', async (req, res) => {
             severity
         });
         await newLog.save();
+
+        // --- AUTOMATED EMAIL ALERT ---
+        if (severity === 'HIGH' || severity === 'CRITICAL' || type === 'PHONE_DETECTED' || type === 'UNAUTHORIZED_PERSON') {
+            const user = await User.findById(userId);
+            if (user) {
+                // Send email asynchronously (don't block the response)
+                sendAlertEmail(user.email, user.fullName, type, details, image);
+            }
+        }
 
         res.status(201).json({ message: "Security Event Logged", log: newLog });
     } catch (err) {

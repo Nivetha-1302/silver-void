@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Scan, UserCheck, AlertTriangle, Camera, RefreshCcw, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import * as faceapi from '@vladmandic/face-api';
 import faceHandler from '../../utils/faceHandler';
 
@@ -115,13 +116,20 @@ const FaceAuth = ({ onSwitchMethod }) => {
           setStatus('verified');
           setMessage(`Verified: ${foundUser.fullName}! ✨`);
 
-          localStorage.setItem('currentUser', JSON.stringify(foundUser));
-          localStorage.setItem('token', 'session_' + Math.random().toString(36).substr(2, 9));
+          try {
+            const res = await axios.post('/api/auth/biometric-login', { userId: foundUser._id });
+            localStorage.setItem('token', res.data.token);
+            localStorage.setItem('currentUser', JSON.stringify(res.data.user));
 
-          setTimeout(() => {
-            if (foundUser.role === 'admin') navigate('/dashboard');
-            else navigate('/workspace');
-          }, 1500);
+            setTimeout(() => {
+              if (res.data.user.role === 'admin') navigate('/dashboard');
+              else navigate('/workspace');
+            }, 1000);
+          } catch (err) {
+            console.error(err);
+            setStatus('error');
+            setMessage('Biometric Sync Failed');
+          }
           return;
         }
       }

@@ -168,7 +168,8 @@ const Register = () => {
         try {
             const payload = {
                 ...formData,
-                faceDescriptor
+                faceDescriptor,
+                profileImage: capturedImage
             };
 
             await axios.post('/api/auth/register', payload);

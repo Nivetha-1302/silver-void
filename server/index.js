@@ -48,6 +48,7 @@ const taskRoutes = require('./routes/tasks');
 const alertRoutes = require('./routes/alerts');
 const attendanceRoutes = require('./routes/attendance');
 const zoneRoutes = require('./routes/zones');
+const announcementRoutes = require('./routes/announcements');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/employees', employeeRoutes);
@@ -57,6 +58,7 @@ app.use('/api/tasks', taskRoutes);
 app.use('/api/alerts', alertRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/zones', zoneRoutes);
+app.use('/api/announcements', announcementRoutes);
 
 // Socket.io Setup
 const io = new Server(server, {
@@ -78,6 +80,17 @@ io.on('connection', (socket) => {
     socket.on('join_room', (userId) => {
         socket.join(userId);
         console.log(`User ${userId} joined room`);
+    });
+
+    // --- REAL-TIME MONITORING RELAYS ---
+    socket.on('dashboard_update', (data) => {
+        // Broadcast to all connected clients (including Admins viewing ScreenGallery)
+        socket.broadcast.emit('dashboard_update', data);
+    });
+
+    socket.on('screenshot_upload', (data) => {
+        // Broadcast new screenshots for the Live Monitor feed
+        socket.broadcast.emit('new_screenshot', data);
     });
 
     socket.on('disconnect', () => {
