@@ -168,6 +168,7 @@ const EmployeeWorkspace = () => {
 
                 const screenshot = getSnapshot();
                 try {
+                    // Log the security event
                     await axios.post('/api/monitoring/log-event', {
                         userId: currentUser._id,
                         type: 'SCREEN_SWITCH',
@@ -175,6 +176,23 @@ const EmployeeWorkspace = () => {
                         severity: 'MEDIUM',
                         image: screenshot
                     });
+
+                    // Store in Screen Gallery permanently
+                    await axios.post('/api/monitoring/screenshot', {
+                        userId: currentUser._id,
+                        image: screenshot,
+                        type: 'Screen_Switch',
+                        context: 'Distracted (Screen Switch)'
+                    });
+
+                    // Relay immediately to Live Monitors
+                    socket.emit('screenshot_upload', {
+                        user: { _id: currentUser._id, fullName: currentUser.fullName },
+                        imageUrl: screenshot,
+                        type: 'Screen_Switch',
+                        activityContext: 'Distracted (Screen Switch)'
+                    });
+
                 } catch (err) { console.error(err); }
             }
         };
