@@ -43,7 +43,7 @@ const VoiceControl = ({ onCommand }) => {
                     onCommand('CHECK_STATUS');
                 }
             };
-
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setRecognition(recognitionInstance);
         } else {
             console.warn("Browser does not support Speech Recognition");

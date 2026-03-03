@@ -1,13 +1,16 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import * as faceapi from '@vladmandic/face-api';
 // Use faceapi.tf to share engine
+// eslint-disable-next-line no-unused-vars
 const tf = faceapi.tf;
 import socket from '../../utils/socket';
-import { Camera, Activity, Smile, Smartphone, Clock, Eye, AlertTriangle } from 'lucide-react';
+import { Camera, Activity, Smile, Smartphone, Clock, Eye, AlertTriangle, User } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import toast from 'react-hot-toast';
+// eslint-disable-next-line no-unused-vars
+import { motion, AnimatePresence } from 'framer-motion';
 import PostureCoach from './PostureCoach';
 import HealthMonitor from './HealthMonitor';
 import VoiceControl from './VoiceControl';
@@ -18,7 +21,10 @@ import faceHandler from '../../utils/faceHandler';
 
 const EmployeeWorkspace = () => {
     const videoRef = useRef(null);
-    const [currentUser, setCurrentUser] = useState(null);
+    const [currentUser, setCurrentUser] = useState(() => {
+        const userStr = localStorage.getItem('currentUser');
+        return userStr ? JSON.parse(userStr) : null;
+    });
     const [status, setStatus] = useState('Initializing');
     const [focusScore, setFocusScore] = useState(100);
     const [mood, setMood] = useState('Neutral');
@@ -27,11 +33,12 @@ const EmployeeWorkspace = () => {
 
     // Spy Feature States
     const [phoneDetected, setPhoneDetected] = useState(false);
-    const [lastActivityTime, setLastActivityTime] = useState(Date.now());
+    const [lastActivityTime, setLastActivityTime] = useState(() => Date.now());
     const [clickCount, setClickCount] = useState(0);
 
     // Analytics State
     const [focusHistory, setFocusHistory] = useState([]);
+    // eslint-disable-next-line no-unused-vars
     const [emotionData, setEmotionData] = useState([
         { name: 'Neutral', value: 1 },
         { name: 'Happy', value: 0 },
@@ -60,20 +67,45 @@ const EmployeeWorkspace = () => {
     const formatTime = (s) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
     const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light');
     const [isProfileOpen, setIsProfileOpen] = useState(false);
-    const [editForm, setEditForm] = useState({ fullName: '', email: '', password: '' });
+    const [editForm, setEditForm] = useState(() => {
+        const userStr = localStorage.getItem('currentUser');
+        if (userStr) {
+            const user = JSON.parse(userStr);
+            return { fullName: user.fullName, email: user.email, password: '' };
+        }
+        return { fullName: '', email: '', password: '' };
+    });
 
     const navigate = useNavigate();
 
+    const getSnapshot = useCallback(() => {
+        if (!videoRef.current) return null;
+        const canvas = document.createElement('canvas');
+        canvas.width = videoRef.current.videoWidth || 640;
+        canvas.height = videoRef.current.videoHeight || 480;
+        const ctx = canvas.getContext('2d');
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(videoRef.current, 0, 0);
+        return canvas.toDataURL('image/jpeg', 0.6);
+    }, []);
+
+    function startVideo() {
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            navigator.mediaDevices.getUserMedia({ video: {} })
+                .then(stream => {
+                    if (videoRef.current) videoRef.current.srcObject = stream;
+                })
+                .catch(err => console.error(err));
+        }
+    }
+
     // 1. Initial Setup
     useEffect(() => {
-        const userStr = localStorage.getItem('currentUser');
-        if (!userStr) {
+        if (!currentUser) {
             navigate('/login');
             return;
         }
-        const user = JSON.parse(userStr);
-        setCurrentUser(user);
-        setEditForm({ fullName: user.fullName, email: user.email, password: '' });
 
         // Sync theme
         if (theme === 'dark') document.documentElement.classList.add('dark');
@@ -125,7 +157,7 @@ const EmployeeWorkspace = () => {
             window.removeEventListener('keydown', updateActivity);
             window.removeEventListener('click', updateActivity);
         };
-    }, [navigate]);
+    }, [navigate, theme, currentUser]);
 
     // 1.5 Screen Switch Detection
     useEffect(() => {
@@ -149,19 +181,7 @@ const EmployeeWorkspace = () => {
 
         document.addEventListener("visibilitychange", handleVisibilityChange);
         return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
-    }, [currentUser]);
-
-    const getSnapshot = () => {
-        if (!videoRef.current) return null;
-        const canvas = document.createElement('canvas');
-        canvas.width = videoRef.current.videoWidth || 640;
-        canvas.height = videoRef.current.videoHeight || 480;
-        const ctx = canvas.getContext('2d');
-        ctx.translate(canvas.width, 0);
-        ctx.scale(-1, 1);
-        ctx.drawImage(videoRef.current, 0, 0);
-        return canvas.toDataURL('image/jpeg', 0.6);
-    };
+    }, [currentUser, getSnapshot]);
 
     // 1.6 Data Collection Interval (Charts)
     useEffect(() => {
@@ -185,22 +205,11 @@ const EmployeeWorkspace = () => {
         return () => clearInterval(interval);
     }, [focusScore, mood]);
 
-    const startVideo = () => {
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-            navigator.mediaDevices.getUserMedia({ video: {} })
-                .then(stream => {
-                    if (videoRef.current) videoRef.current.srcObject = stream;
-                })
-                .catch(err => console.error(err));
-        }
-    };
-
-    // State Refs for Interval Access
     const stateRef = useRef({
         status: 'Initializing',
         focusScore: 100,
         mood: 'Neutral',
-        lastActivityTime: Date.now(),
+        lastActivityTime: 0,
         postureStatus: 'Good'
     });
 
@@ -276,8 +285,8 @@ const EmployeeWorkspace = () => {
                         }
                     }
                 }
-            } catch (err) {
-                // console.warn("FaceAPI Error:", err);
+            } catch {
+                // console.warn("FaceAPI Error:");
             }
 
             // B. OBJECT DETECTION
@@ -288,8 +297,8 @@ const EmployeeWorkspace = () => {
                     isPhone = !!phoneObj;
                     setPhoneDetected(isPhone);
                 }
-            } catch (err) {
-                // console.warn("COCO Error:", err);
+            } catch {
+                // console.warn("COCO Error:");
             }
 
             // C. LOGIC ENGINE & SECURITY THREATS
@@ -376,7 +385,7 @@ const EmployeeWorkspace = () => {
         }, 1000);
 
         return () => clearInterval(interval);
-    }, [currentUser, securityThreat]);
+    }, [currentUser, securityThreat, getSnapshot]);
 
 
 
@@ -458,7 +467,7 @@ const EmployeeWorkspace = () => {
                 setStatus('Active');
                 break;
             case 'CLOCK_OUT':
-                handleClockOut();
+                handleLogout();
                 break;
             case 'CHECK_STATUS':
                 toast(`Status: ${status} | Focus: ${Math.round(focusScore)}%`, { icon: '🤖' });
@@ -870,7 +879,7 @@ const EmployeeWorkspace = () => {
                     <span className="text-[10px] font-black text-indigo-400 uppercase px-8">📢 SYSTEM BROADCAST:</span>
                     {announcements.length > 0 ? announcements.map((a, i) => (
                         <span key={i} className={`text-[10px] font-bold uppercase px-4 italic ${a.type === 'congrats' ? 'text-emerald-400' :
-                                a.type === 'urgent' ? 'text-rose-400' : 'text-white'
+                            a.type === 'urgent' ? 'text-rose-400' : 'text-white'
                             }`}>
                             {a.message}...
                         </span>
@@ -881,7 +890,7 @@ const EmployeeWorkspace = () => {
                     <span className="text-[10px] font-black text-indigo-400 uppercase px-8">📢 SYSTEM BROADCAST:</span>
                     {announcements.map((a, i) => (
                         <span key={`dup-${i}`} className={`text-[10px] font-bold uppercase px-4 italic ${a.type === 'congrats' ? 'text-emerald-400' :
-                                a.type === 'urgent' ? 'text-rose-400' : 'text-white'
+                            a.type === 'urgent' ? 'text-rose-400' : 'text-white'
                             }`}>
                             {a.message}...
                         </span>

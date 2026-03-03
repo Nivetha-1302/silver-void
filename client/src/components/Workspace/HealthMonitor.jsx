@@ -2,8 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { Coffee, Eye, GlassWater } from 'lucide-react';
 
-const HealthMonitor = ({ isActive, focusScore }) => {
-    const [lastBreakTime, setLastBreakTime] = useState(Date.now());
+const HealthMonitor = ({ isActive }) => {
     const [continuousWorkTime, setContinuousWorkTime] = useState(0);
 
     // 1. Connection to Time

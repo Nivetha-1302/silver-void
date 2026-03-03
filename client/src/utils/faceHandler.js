@@ -32,7 +32,7 @@ class FaceHandler {
                         await faceapi.tf.setBackend('webgl');
                     }
                     await faceapi.tf.ready();
-                } catch (e) {
+                } catch {
                     console.warn("[FaceHandler] WebGL not available, falling back to CPU");
                     await faceapi.tf.setBackend('cpu');
                     await faceapi.tf.ready();
