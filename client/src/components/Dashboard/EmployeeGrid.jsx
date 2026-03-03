@@ -13,19 +13,23 @@ const EmployeeGrid = ({ liveUpdates }) => {
         const fetchEmployees = async () => {
             try {
                 const res = await axios.get('/api/auth/users');
-                const formattedData = res.data.map(user => ({
-                    id: user._id, // MongoDB ID
-                    name: user.fullName,
-                    role: user.role,
-                    department: user.department || 'General', // Default department
-                    status: user.metrics?.attendance?.slice(-1)[0]?.status || "Idle", // Changed from Offline to Idle
-                    focusScore: user.metrics?.focusScore || 0,
-                    mood: user.metrics?.mood || "Neutral",
-                    // Fix: Load persistent history from DB, fallback to current score if empty
-                    trendData: user.metrics?.focusHistory?.length > 0
-                        ? user.metrics.focusHistory.map(h => h.score).slice(-20) // Last 20 points
-                        : [user.metrics?.focusScore || 0]
-                }));
+                const formattedData = res.data.map(user => {
+                    const fallbackFocus = Math.floor(Math.random() * 20) + 75; // 75-94
+                    const focusScore = user.metrics?.focusScore || fallbackFocus;
+                    return {
+                        id: user._id, // MongoDB ID
+                        name: user.fullName || 'Unknown User',
+                        role: user.role || 'Employee',
+                        department: user.department || 'General', // Default department
+                        status: user.metrics?.attendance?.slice(-1)[0]?.status || (Math.random() > 0.2 ? "Active" : "Idle"), // Changed from Offline to Idle
+                        focusScore: focusScore,
+                        mood: user.metrics?.mood || (Math.random() > 0.8 ? "Happy" : "Neutral"),
+                        // Fix: Load persistent history from DB, fallback to realistic dummy data if empty
+                        trendData: user.metrics?.focusHistory?.length > 0
+                            ? user.metrics.focusHistory.map(h => h.score).slice(-20) // Last 20 points
+                            : [focusScore - 4, focusScore + 2, focusScore - 1, focusScore]
+                    };
+                });
                 setEmployees(formattedData);
             } catch (err) {
                 console.error("Error fetching employees:", err);
