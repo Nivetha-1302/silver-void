@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
-import { Coffee, Eye, GlassWater } from 'lucide-react';
+import { Coffee, Eye, GlassWater, Clock } from 'lucide-react';
 
 const HealthMonitor = ({ isActive }) => {
     const [continuousWorkTime, setContinuousWorkTime] = useState(0);
