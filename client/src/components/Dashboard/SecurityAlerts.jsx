@@ -5,8 +5,11 @@ import socket from '../../utils/socket';
 
 const SecurityAlerts = () => {
     const [alerts, setAlerts] = useState([
-        { id: 1, type: 'warning', message: 'Firewall Update Required', time: '10:00 AM', icon: ShieldAlert },
-        { id: 2, type: 'info', message: 'System Backup Completed', time: '09:30 AM', icon: Lock },
+        { id: 1, type: 'critical', message: 'PHONE DETECTED: User 7f2a (Divya)', time: '10:24 AM', icon: Smartphone },
+        { id: 2, type: 'warning', message: 'High Distraction Rate: Engineering Dept', time: '10:15 AM', icon: AlertTriangle },
+        { id: 3, type: 'info', message: 'System Backup Completed', time: '09:30 AM', icon: Lock },
+        { id: 4, type: 'critical', message: 'Red Zone Entered: User 8b1c (Abisha)', time: '09:12 AM', icon: MapPin },
+        { id: 5, type: 'warning', message: 'Firewall Update Required', time: '08:45 AM', icon: ShieldAlert }
     ]);
 
     useEffect(() => {

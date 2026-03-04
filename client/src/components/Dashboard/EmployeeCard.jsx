@@ -4,7 +4,7 @@ import { User, Activity, AlertCircle, CheckCircle, Smartphone } from 'lucide-rea
 import { AreaChart, Area, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recharts';
 
 const EmployeeCard = ({ employee }) => {
-    const { name, role, status, focusScore, mood, trendData } = employee;
+    const { name, role, status, focusScore, mood, trendData, metricsDetails } = employee;
 
     // User requested to remove "Offline" - mapping it to "Idle"
     const displayStatus = status === 'Offline' ? 'Idle' : status;
@@ -18,15 +18,26 @@ const EmployeeCard = ({ employee }) => {
         'Distracted': 'text-rose-700 bg-rose-50 border-rose-200',
     };
 
+    // Default metrics if not provided
+    const details = metricsDetails || {
+        mouseClicks: '--',
+        keyboardClicks: '--',
+        screenDistracted: '--',
+        mobileUsage: '--',
+        productivity: '--',
+        overallPerformance: '--',
+        zoneTracking: '--'
+    };
+
     return (
         <motion.div
-            className="group relative bg-white border border-slate-200 shadow-sm rounded-2xl overflow-hidden hover:shadow-xl hover:shadow-indigo-500/10 transition-all duration-300"
+            className="group relative bg-white border border-slate-200 shadow-sm rounded-2xl overflow-hidden hover:shadow-xl hover:shadow-indigo-500/10 transition-all duration-300 flex flex-col"
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             whileHover={{ y: -5 }}
         >
             {/* Header / Profile */}
-            <div className="p-5 flex items-start justify-between">
+            <div className="p-4 flex items-start justify-between border-b border-slate-50">
                 <div className="flex gap-4">
                     <div className="relative">
                         <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-indigo-500 to-violet-500 p-[2px]">
@@ -51,22 +62,50 @@ const EmployeeCard = ({ employee }) => {
             </div>
 
             {/* Metrics Grid */}
-            <div className="px-5 pb-4 grid grid-cols-2 gap-4">
+            <div className="p-4 grid grid-cols-2 gap-3 text-sm flex-1">
                 {/* Focus Score */}
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                    <div className="flex items-center gap-2 mb-1">
-                        <Activity className="w-3 h-3 text-indigo-500" />
-                        <span className="text-xs font-medium text-slate-500">Focus</span>
+                <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 flex flex-col justify-between">
+                    <div className="flex items-center gap-1.5 mb-1 text-slate-500">
+                        <Activity className="w-3.5 h-3.5 text-indigo-500" />
+                        <span className="text-[10px] font-bold uppercase tracking-wider">Focus</span>
                     </div>
-                    <div className="text-xl font-bold text-slate-800">{focusScore}%</div>
+                    <div className="text-lg font-black text-slate-800">{focusScore}%</div>
                 </div>
                 {/* Mood */}
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                    <div className="flex items-center gap-2 mb-1">
-                        <Smartphone className="w-3 h-3 text-violet-500" /> {/* Using generic icon for mood/device */}
-                        <span className="text-xs font-medium text-slate-500">Mood</span>
+                <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 flex flex-col justify-between">
+                    <div className="flex items-center gap-1.5 mb-1 text-slate-500">
+                        <Smartphone className="w-3.5 h-3.5 text-violet-500" />
+                        <span className="text-[10px] font-bold uppercase tracking-wider">Mood</span>
                     </div>
-                    <div className="text-lg font-bold text-slate-800">{mood}</div>
+                    <div className="text-sm font-bold text-slate-700">{mood}</div>
+                </div>
+            </div>
+
+            {/* Detailed Stats Grid (Expandable via hover or just simple grid) */}
+            <div className="px-4 pb-4 grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                <div className="flex justify-between items-center border-b border-slate-50 pb-1">
+                    <span className="text-slate-500">Mouse:</span>
+                    <span className="font-semibold text-slate-700">{details.mouseClicks}</span>
+                </div>
+                <div className="flex justify-between items-center border-b border-slate-50 pb-1">
+                    <span className="text-slate-500">Keys:</span>
+                    <span className="font-semibold text-slate-700">{details.keyboardClicks}</span>
+                </div>
+                <div className="flex justify-between items-center border-b border-slate-50 pb-1">
+                    <span className="text-slate-500">Distracted:</span>
+                    <span className="font-semibold text-slate-700">{details.screenDistracted}x</span>
+                </div>
+                <div className="flex justify-between items-center border-b border-slate-50 pb-1">
+                    <span className="text-slate-500">Mobile:</span>
+                    <span className={`font-semibold ${details.mobileUsage === 'Yes' ? 'text-rose-600' : 'text-emerald-600'}`}>{details.mobileUsage}</span>
+                </div>
+                <div className="flex justify-between items-center border-b border-slate-50 pb-1">
+                    <span className="text-slate-500">Productivity:</span>
+                    <span className="font-semibold text-indigo-600">{details.productivity}%</span>
+                </div>
+                <div className="flex justify-between items-center border-b border-slate-50 pb-1">
+                    <span className="text-slate-500">Zone:</span>
+                    <span className={`font-semibold text-[10px] ${details.zoneTracking === 'Red Zone' ? 'text-rose-600' : details.zoneTracking === 'Green Zone' ? 'text-emerald-600' : 'text-amber-600'}`}>{details.zoneTracking}</span>
                 </div>
             </div>
 
