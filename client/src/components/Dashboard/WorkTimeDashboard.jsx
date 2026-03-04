@@ -6,17 +6,45 @@ import socket from '../../utils/socket';
 
 const WorkTimeDashboard = () => {
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-    const [activityData, setActivityData] = useState([]);
+    const [activityData, setActivityData] = useState(() => {
+        return new Array(8).fill(0).map((_, i) => ({
+            name: `${i + 8}:00`,
+            active: Math.floor(Math.random() * 40) + 10,
+            idle: Math.floor(Math.random() * 10) + 1
+        }));
+    });
 
     // Live State
     const [liveStats, setLiveStats] = useState({
-        active: 0,
-        idle: 0,
-        productive: 0,
-        unproductive: 0
+        active: 14500, // Non-zero start
+        idle: 2400,
+        productive: 12000,
+        unproductive: 1800
     });
 
-    const [activeSessions, setActiveSessions] = useState({});
+    const [activeSessions, setActiveSessions] = useState(() => {
+        const names = [
+            "Divya", "Abisha", "Priya", "Sneha", "Pooja",
+            "Anjali", "Neha", "Riya", "Shreya", "Kavya",
+            "Nidhi", "Swati", "Rashi", "Aditi", "Shikha",
+            "Megha", "Tanvi", "Kritika", "Sakshi", "Nisha"
+        ];
+        const dummySessions = {};
+        const now = new Date();
+        names.forEach((name, i) => {
+            const isDistracted = Math.random() > 0.8;
+            dummySessions[`node-${i}`] = {
+                startTime: new Date(now.getTime() - Math.random() * 10000000),
+                currentStatus: isDistracted ? 'Distracted' : (Math.random() > 0.3 ? 'Active' : 'Deep Work'),
+                history: [],
+                lastUpdate: now,
+                focus: Math.floor(Math.random() * 20) + 75,
+                mood: isDistracted ? 'Stressed' : (Math.random() > 0.5 ? 'Happy' : 'Neutral'),
+                employeeName: name // For display if needed
+            };
+        });
+        return dummySessions;
+    });
 
     useEffect(() => {
         // Listen for live updates
@@ -49,11 +77,8 @@ const WorkTimeDashboard = () => {
                 if (sessions.length === 0) return prev;
 
                 sessions.forEach(session => {
-                    // Check staleness (e.g. if no update for 10s, consider offline/idle)
-                    const isStale = (new Date() - new Date(session.lastUpdate)) > 10000;
-
-                    if (isStale || session.currentStatus === 'Offline') {
-                        // Optional: could count as idle or just ignore
+                    // Ignore staleness for dummy data so it keeps accumulating
+                    if (session.currentStatus === 'Offline') {
                         return;
                     }
 
@@ -178,7 +203,7 @@ const WorkTimeDashboard = () => {
                 <StatCard
                     title="Active Agents"
                     value={Object.keys(activeSessions).length}
-                    sub="Online Now"
+                    sub="Active Now"
                     icon={Monitor}
                     color="text-blue-600"
                     bg="bg-blue-50"
@@ -284,7 +309,7 @@ const WorkTimeDashboard = () => {
                                     <td className="px-6 py-4 text-sm font-medium text-gray-700 font-mono">
                                         <div className="flex items-center gap-2">
                                             <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-                                            WS-{id.slice(0, 6)}
+                                            {session.employeeName || `WS-${id.slice(0, 6)}`}
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">
